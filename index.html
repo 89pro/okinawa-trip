@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>夏日沖繩經典四日遊行程手冊</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .tab-active { border-bottom: 3px solid #0284c7; color: #0284c7; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 pb-20 max-w-md mx-auto shadow-2xl min-h-screen relative">
+
+    <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-4 sticky top-0 z-50 shadow-md">
+        <div class="flex justify-between items-center mb-1">
+            <span class="bg-orange-500 text-xs px-2 py-0.5 rounded-full font-bold">團號：26091304D</span>
+            <span class="text-xs opacity-90"><i class="fa-solid fa-plane"></i> 中華航空</span>
+        </div>
+        <h1 class="text-xl font-black tracking-wide">夏日沖繩經典 4 日遊</h1>
+        <p class="text-xs text-sky-100 mt-1">2026/09/13 (日) ～ 09/16 (三) | 領隊：陳連玲 (0910-153-719)</p>
+    </header>
+
+    <nav class="flex bg-white shadow-sm border-b sticky top-[73px] z-40 text-center text-sm font-medium">
+        <button onclick="switchTab('itinerary')" id="btn-itinerary" class="flex-1 py-3 tab-active"><i class="fa-solid fa-calendar-day mr-1"></i>每日行程</button>
+        <button onclick="switchTab('flight')" id="btn-flight" class="flex-1 py-3 text-slate-500"><i class="fa-solid fa-plane-departure mr-1"></i>航班/集合</button>
+        <button onclick="switchTab('tools')" id="btn-tools" class="flex-1 py-3 text-slate-500"><i class="fa-solid fa-toolbox mr-1"></i>小工具/須知</button>
+    </nav>
+
+    <main id="tab-itinerary" class="p-4 space-y-6">
+
+        <div class="bg-sky-50 border border-sky-200 rounded-xl p-3 flex justify-between items-center text-xs">
+            <div>
+                <p class="font-bold text-sky-800"><i class="fa-solid fa-cloud-sun-rain text-sky-600 mr-1"></i>沖繩實時天氣資訊</p>
+                <p class="text-slate-600 mt-0.5" id="weather-info">載入今日氣象中...</p>
+            </div>
+            <button onclick="fetchWeather()" class="bg-sky-600 text-white px-2.5 py-1 rounded-lg text-xs shadow hover:bg-sky-700">更新天氣</button>
+        </div>
+
+        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+            <div class="flex justify-between items-center border-b pb-2 border-slate-100">
+                <span class="text-lg font-black text-sky-600">DAY 1 <span class="text-xs text-slate-500 font-normal">09/13 (日)</span></span>
+                <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">降雨率：<span id="rain-d1">--</span>% | <span id="temp-d1">--</span>°C</span>
+            </div>
+            
+            <div class="space-y-3 text-sm">
+                <div class="border-l-2 border-sky-500 pl-3">
+                    <p class="text-xs text-slate-400">05:50 集合 | 08:15 起飛</p>
+                    <p class="font-bold">桃園機場 ➔ 沖繩那霸空港 (CI120)</p>
+                </div>
+                
+                <div class="border-l-2 border-sky-500 pl-3">
+                    <p class="text-xs text-slate-400">11:00 抵達後前往</p>
+                    <a href="https://maps.google.com/?q=波上宮" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
+                        <i class="fa-solid fa-location-dot mr-1"></i>波之上神宮
+                    </a>
+                    <p class="text-xs text-slate-500">懸崖上的琉球神社，祈求旅途平安。</p>
+                </div>
+
+                <div class="border-l-2 border-sky-500 pl-3">
+                    <p class="text-xs text-slate-400">下午行程</p>
+                    <a href="https://maps.google.com/?q=瀬長島ウミカジテラス" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
+                        <i class="fa-solid fa-location-dot mr-1"></i>瀨長島 Umikaji Terrace
+                    </a>
+                    <p class="text-xs text-slate-500">複合型屋台村，擁有沖繩小希臘美譽。</p>
+                </div>
+            </div>
+
+            <div class="bg-amber-50 p-2.5 rounded-lg text-xs text-amber-800 border border-amber-200">
+                <i class="fa-solid fa-circle-exclamation mr-1"></i><b>注意事項：</b>出關後請留意領隊集合，今日海邊風大請注意防曬與帽子。
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl">
+                <p class="text-xs text-slate-500 font-bold mb-1"><i class="fa-solid fa-hotel text-slate-600 mr-1"></i>當晚住宿飯店：</p>
+                <a href="https://maps.google.com/?q=TWIN-LINE+HOTEL+YANBARU+OKINAWA" target="_blank" class="font-bold text-slate-800 hover:text-blue-600 text-sm block mb-2">
+                    TWIN-LINE HOTEL YANBARU OKINAWA
+                </a>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <a href="https://www.google.com/maps/search/supermarket+near+TWIN-LINE+HOTEL+YANBARU+OKINAWA" target="_blank" class="bg-emerald-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-emerald-700">
+                        <i class="fa-solid fa-cart-shopping mr-1"></i>搜尋附近超市
+                    </a>
+                    <a href="https://www.google.com/maps/search/laundromat+near+TWIN-LINE+HOTEL+YANBARU+OKINAWA" target="_blank" class="bg-indigo-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-indigo-700">
+                        <i class="fa-solid fa-jug-detergent mr-1"></i>搜尋自助洗衣
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+            <div class="flex justify-between items-center border-b pb-2 border-slate-100">
+                <span class="text-lg font-black text-sky-600">DAY 2 <span class="text-xs text-slate-500 font-normal">09/14 (一)</span></span>
+                <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">降雨率：<span id="rain-d2">--</span>% | <span id="temp-d2">--</span>°C</span>
+            </div>
+
+            <div class="space-y-3 text-sm">
+                <div class="border-l-2 border-sky-500 pl-3">
+                    <p class="text-xs text-slate-400">約 08:30 飯店出發</p>
+                    <a href="https://maps.google.com/?q=備瀬のフクギ並木" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
+                        <i class="fa-solid fa-location-dot mr-1"></i>備瀨福木林道
+                    </a>
+                    <p class="text-xs text-slate-500">治癒系防風林大道，散步吸取芬多精。</p>
+                </div>
+
+                <div class="border-l-2 border-sky-500 pl-3">
+                    <p class="text-xs text-slate-400">重點景點</p>
+                    <a href="https://maps.google.com/?q=沖繩海洋博公園" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
+                        <i class="fa-solid fa-location-dot mr-1"></i>沖繩海洋博公園 + 美之海水族館
+                    </a>
+                    <p class="text-xs text-slate-500">包含水族館門票與海豚表演秀（午餐自理 ￥3500）。</p>
+                </div>
+            </div>
+
+            <div class="bg-amber-50 p-2.5 rounded-lg text-xs text-amber-800 border border-amber-200">
+                <i class="fa-solid fa-circle-exclamation mr-1"></i><b>注意事項：</b>水族館園區較大，請隨身攜帶防曬用品與充足飲水，留意海豚秀時間。
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl">
+                <p class="text-xs text-slate-500 font-bold mb-1"><i class="fa-solid fa-hotel text-slate-600 mr-1"></i>當晚住宿飯店：</p>
+                <a href="https://maps.google.com/?q=Hotel+Torifito+Naha+Asahibashi" target="_blank" class="font-bold text-slate-800 hover:text-blue-600 text-sm block mb-2">
+                    Hotel Torifito Naha Asahibashi (鳥瀨戶那霸旭橋)
+                </a>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <a href="https://www.google.com/maps/search/supermarket+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-emerald-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-emerald-700">
+                        <i class="fa-solid fa-cart-shopping mr-1"></i>搜尋附近超市
+                    </a>
+                    <a href="https://www.google.com/maps/search/laundromat+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-indigo-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-indigo-700">
+                        <i class="fa-solid fa-jug-detergent mr-1"></i>搜尋自助洗衣
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+            <div class="flex justify-between items-center border-b pb-2 border-slate-100">
+                <span class="text-lg font-black text-sky-600">DAY 3 <span class="text-xs text-slate-500 font-normal">09/15 (二)</span></span>
+                <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">降雨率：<span id="rain-d3">--</span>% | <span id="temp-d3">--</span>°C</span>
+            </div>
+
+            <div class="space-y-3 text-sm">
+                <div class="border-l-2 border-sky-500 pl-3">
+                    <p class="text-xs text-slate-400">上午行程</p>
+                    <a href="https://maps.google.com/?q=玉泉洞+文化王國" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
+                        <i class="fa-solid fa-location-dot mr-1"></i>玉泉洞 + 文化王國村
+                    </a>
+                    <p class="text-xs text-slate-500">三大鐘乳石洞、琉球大鼓秀表演（午餐：Orion Hotel 自助餐 ￥4000）。</p>
+                </div>
+
+                <div class="border-l-2 border-sky-500 pl-3">
+                    <p class="text-xs text-slate-400">下午購物行程</p>
+                    <a href="https://maps.google.com/?q=PARCO+CITY" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
+                        <i class="fa-solid fa-location-dot mr-1"></i>PARCO CITY 沖繩最大購物中心
+                    </a>
+                </div>
+
+                <div class="border-l-2 border-sky-500 pl-3">
+                    <p class="text-xs text-slate-400">晚上行程</p>
+                    <a href="https://maps.google.com/?q=國際通" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
+                        <i class="fa-solid fa-location-dot mr-1"></i>國際大道逛街購物
+                    </a>
+                    <p class="text-xs text-slate-500">晚餐：琉球風味套餐 / 美山涮涮鍋吃到飽。</p>
+                </div>
+            </div>
+
+            <div class="bg-amber-50 p-2.5 rounded-lg text-xs text-amber-800 border border-amber-200">
+                <i class="fa-solid fa-circle-exclamation mr-1"></i><b>注意事項：</b>玉泉洞內步道較潮濕滑溜，請穿著防滑平底鞋；國際通購物請注意集合時間。
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl">
+                <p class="text-xs text-slate-500 font-bold mb-1"><i class="fa-solid fa-hotel text-slate-600 mr-1"></i>當晚住宿飯店：</p>
+                <a href="https://maps.google.com/?q=Hotel+Torifito+Naha+Asahibashi" target="_blank" class="font-bold text-slate-800 hover:text-blue-600 text-sm block mb-2">
+                    Hotel Torifito Naha Asahibashi (連住第二晚)
+                </a>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <a href="https://www.google.com/maps/search/supermarket+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-emerald-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-emerald-700">
+                        <i class="fa-solid fa-cart-shopping mr-1"></i>搜尋附近超市
+                    </a>
+                    <a href="https://www.google.com/maps/search/laundromat+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-indigo-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-indigo-700">
+                        <i class="fa-solid fa-jug-detergent mr-1"></i>搜尋自助洗衣
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+            <div class="flex justify-between items-center border-b pb-2 border-slate-100">
+                <span class="text-lg font-black text-sky-600">DAY 4 <span class="text-xs text-slate-500 font-normal">09/16 (三)</span></span>
+                <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">降雨率：<span id="rain-d4">--</span>% | <span id="temp-d4">--</span>°C</span>
+            </div>
+
+            <div class="space-y-3 text-sm">
+                <div class="border-l-2 border-sky-500 pl-3">
+                    <p class="text-xs text-slate-400">飯店早餐後</p>
+                    <p class="font-bold">整理行李與退房辦理</p>
+                </div>
+
+                <div class="border-l-2 border-sky-500 pl-3">
+                    <p class="text-xs text-slate-400">預計 09:30 抵達機場</p>
+                    <a href="https://maps.google.com/?q=那霸空港" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
+                        <i class="fa-solid fa-location-dot mr-1"></i>那霸空港 ➔ 桃園國際機場 (CI121)
+                    </a>
+                    <p class="text-xs text-slate-500">11:55 起飛 / 12:35 抵達台灣。</p>
+                </div>
+            </div>
+
+            <div class="bg-amber-50 p-2.5 rounded-lg text-xs text-amber-800 border border-amber-200">
+                <i class="fa-solid fa-circle-exclamation mr-1"></i><b>注意事項：</b>托运行李限重 20kg，隨身行李 7kg，切勿攜帶肉類製品或違禁品返台。
+            </div>
+        </section>
+    </main>
+
+    <main id="tab-flight" class="p-4 space-y-4 hidden">
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-users text-sky-600 mr-2"></i>團體與領隊資訊</h3>
+            <ul class="text-sm space-y-2 mt-2">
+                <li><b>團號：</b>26091304D</li>
+                <li><b>領隊：</b>陳連玲 小姐</li>
+                <li><b>電話：</b><a href="tel:0910153719" class="text-blue-600 underline">0910-153-719</a></li>
+                <li><b>旅行社：</b>中來國際旅行社 (03-3347588)</li>
+            </ul>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-plane-up text-sky-600 mr-2"></i>航班時間明細</h3>
+            <div class="space-y-3 mt-3 text-sm">
+                <div class="bg-slate-50 p-2.5 rounded-lg">
+                    <p class="font-bold text-sky-700">去程：中華航空 CI120</p>
+                    <p class="text-xs text-slate-600">日期：2026/09/13 (日)</p>
+                    <p class="text-xs text-slate-600">集合：05:50 桃園二航廈 中華航空7號櫃檯</p>
+                    <p class="text-xs font-semibold text-slate-800 mt-1">起飛 08:15 桃園 ➔ 抵達 10:45 沖繩</p>
+                </div>
+                <div class="bg-slate-50 p-2.5 rounded-lg">
+                    <p class="font-bold text-sky-700">回程：中華航空 CI121</p>
+                    <p class="text-xs text-slate-600">日期：2026/09/16 (三)</p>
+                    <p class="text-xs font-semibold text-slate-800 mt-1">起飛 11:55 沖繩 ➔ 抵達 12:35 桃園</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <main id="tab-tools" class="p-4 space-y-4 hidden">
+
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <h3 class="font-bold border-b pb-2 text-slate-800 mb-3"><i class="fa-solid fa-link text-sky-600 mr-2"></i>線上預約與申報連結</h3>
+            <div class="grid grid-cols-1 gap-2">
+                <a href="https://www.vjw.digital.go.jp/" target="_blank" class="bg-blue-600 text-white text-center py-2.5 px-4 rounded-xl font-bold shadow flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-passport"></i> 日本 Visit Japan Web (入境申報)
+                </a>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <h3 class="font-bold border-b pb-2 text-slate-800 mb-3"><i class="fa-solid fa-calculator text-sky-600 mr-2"></i>日幣簡單換算器 (概算 0.22)</h3>
+            <div class="flex items-center gap-2 text-sm">
+                <input type="number" id="jpy-input" placeholder="輸入日幣 JPY" oninput="convertCurrency()" class="w-1/2 p-2 border rounded-lg focus:outline-none focus:border-sky-500">
+                <span class="text-lg font-bold">¥ =</span>
+                <span id="twd-output" class="text-lg font-bold text-emerald-600">0 NTD</span>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-2 text-xs text-slate-600">
+            <h3 class="font-bold border-b pb-2 text-slate-800 text-sm"><i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i>日本海關嚴格規定</h3>
+            <p class="text-red-600 font-bold">🚫 嚴禁攜帶任何肉類製品（含含肉餐盒、香腸、真空包裝肉乾）及蔬果入境/入境台灣！違者重罰。</p>
+            <p>🔋 行動電源與鋰電池必須隨身攜帶，嚴禁放進託運行李。</p>
+            <p>🧳 託運行李限重 20 公斤，手提行李限重 7 公斤。</p>
+            <p>🔌 日本電壓為 100V (雙平腳插頭)，台灣電器可直接使用。</p>
+        </div>
+    </main>
+
+    <script>
+        // 切換 Tab 頁面
+        function switchTab(tabName) {
+            document.getElementById('tab-itinerary').classList.add('hidden');
+            document.getElementById('tab-flight').classList.add('hidden');
+            document.getElementById('tab-tools').classList.add('hidden');
+
+            document.getElementById('btn-itinerary').className = "flex-1 py-3 text-slate-500";
+            document.getElementById('btn-flight').className = "flex-1 py-3 text-slate-500";
+            document.getElementById('btn-tools').className = "flex-1 py-3 text-slate-500";
+
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+            document.getElementById('btn-' + tabName).className = "flex-1 py-3 tab-active";
+        }
+
+        // 匯率換算
+        function convertCurrency() {
+            const jpy = document.getElementById('jpy-input').value;
+            const rate = 0.22; // 設定即時參考匯率
+            const twd = Math.round(jpy * rate);
+            document.getElementById('twd-output').innerText = (twd || 0) + ' NTD';
+        }
+
+        // Open-Meteo API 抓取那霸即時氣象
+        async function fetchWeather() {
+            try {
+                const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=26.2124&longitude=127.6809&daily=temperature_2m_max,precipitation_probability_max&timezone=Asia%2FTokyo');
+                const data = await res.json();
+                
+                if(data && data.daily) {
+                    const temps = data.daily.temperature_2m_max;
+                    const rains = data.daily.precipitation_probability_max;
+                    
+                    document.getElementById('weather-info').innerText = `沖繩今日預測最高溫 ${temps[0]}°C，降雨機率 ${rains[0]}%`;
+                    
+                    // 填入行程各日概況
+                    ['d1', 'd2', 'd3', 'd4'].forEach((day, index) => {
+                        if(temps[index] !== undefined) {
+                            document.getElementById(`temp-${day}`).innerText = temps[index];
+                            document.getElementById(`rain-${day}`).innerText = rains[index];
+                        }
+                    });
+                }
+            } catch (e) {
+                document.getElementById('weather-info').innerText = "沖繩平均氣溫 27~30°C，晴時多雲";
+            }
+        }
+
+        // 頁面載入自動抓取天氣
+        window.onload = fetchWeather;
+    </script>
+</body>
+</html>
