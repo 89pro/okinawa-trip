@@ -9,6 +9,12 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         .tab-active { border-bottom: 3px solid #0284c7; color: #0284c7; font-weight: bold; }
+        /* 列印樣式：隱藏按鈕與導航，僅保留內容 */
+        @media print {
+            nav, button, .no-print { display: none !important; }
+            header { position: static; background: white; color: black; }
+            main { display: block !important; }
+        }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 pb-20 max-w-md mx-auto shadow-2xl min-h-screen relative">
@@ -19,16 +25,31 @@
             <span class="text-xs opacity-90"><i class="fa-solid fa-plane"></i> 中華航空</span>
         </div>
         <h1 class="text-xl font-black tracking-wide">夏日沖繩經典 4 日遊</h1>
-        <p class="text-xs text-sky-100 mt-1">2026/09/13 (日) ～ 09/16 (三) | 領隊：陳連玲 (0910-153-719)</p>
+        <p class="text-xs text-sky-100 mt-1">2026/09/13 (日) ～ 09/16 (三) | 領隊：陳達玲 (0910-153-719)</p>
     </header>
 
     <nav class="flex bg-white shadow-sm border-b sticky top-[73px] z-40 text-center text-sm font-medium">
         <button onclick="switchTab('itinerary')" id="btn-itinerary" class="flex-1 py-3 tab-active"><i class="fa-solid fa-calendar-day mr-1"></i>每日行程</button>
         <button onclick="switchTab('flight')" id="btn-flight" class="flex-1 py-3 text-slate-500"><i class="fa-solid fa-plane-departure mr-1"></i>航班/集合</button>
         <button onclick="switchTab('tools')" id="btn-tools" class="flex-1 py-3 text-slate-500"><i class="fa-solid fa-toolbox mr-1"></i>小工具/須知</button>
+        <button onclick="switchTab('prep')" id="btn-prep" class="flex-1 py-3 text-slate-500"><i class="fa-solid fa-suitcase mr-1"></i>出發準備</button>
     </nav>
 
     <main id="tab-itinerary" class="p-4 space-y-6">
+
+        <!-- 房號管理區（可編輯） -->
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="font-bold text-sky-700"><i class="fa-solid fa-bed mr-2"></i>團員房號分配</h3>
+                <button onclick="toggleRoomEdit()" id="room-edit-btn" class="text-xs bg-sky-600 text-white px-2 py-1 rounded hover:bg-sky-700">
+                    <i class="fa-solid fa-pen"></i> 編輯
+                </button>
+            </div>
+            <p class="text-xs text-slate-500 mb-2">共 21 間房，請依實際分配填寫。資料會自動儲存於本裝置。</p>
+            <div id="room-list" class="grid grid-cols-3 gap-2 text-xs">
+                <!-- 動態生成房號輸入框 -->
+            </div>
+        </div>
 
         <div class="bg-sky-50 border border-sky-200 rounded-xl p-3 flex justify-between items-center text-xs">
             <div>
@@ -38,7 +59,8 @@
             <button onclick="fetchWeather()" class="bg-sky-600 text-white px-2.5 py-1 rounded-lg text-xs shadow hover:bg-sky-700">更新天氣</button>
         </div>
 
-        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <!-- DAY 1 -->
+        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3" data-night="1">
             <div class="flex justify-between items-center border-b pb-2 border-slate-100">
                 <span class="text-lg font-black text-sky-600">DAY 1 <span class="text-xs text-slate-500 font-normal">09/13 (日)</span></span>
                 <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">降雨率：<span id="rain-d1">--</span>% | <span id="temp-d1">--</span>°C</span>
@@ -76,6 +98,10 @@
                 <a href="https://maps.google.com/?q=TWIN-LINE+HOTEL+YANBARU+OKINAWA" target="_blank" class="font-bold text-slate-800 hover:text-blue-600 text-sm block mb-2">
                     TWIN-LINE HOTEL YANBARU OKINAWA
                 </a>
+                <!-- 動態顯示該晚房號 -->
+                <div class="text-xs text-slate-600 mb-2">
+                    <b>團員房號：</b> <span id="rooms-night-1" class="text-sky-700">載入中...</span>
+                </div>
                 <div class="grid grid-cols-2 gap-2 text-xs">
                     <a href="https://www.google.com/maps/search/supermarket+near+TWIN-LINE+HOTEL+YANBARU+OKINAWA" target="_blank" class="bg-emerald-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-emerald-700">
                         <i class="fa-solid fa-cart-shopping mr-1"></i>搜尋附近超市
@@ -87,7 +113,8 @@
             </div>
         </section>
 
-        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <!-- DAY 2 -->
+        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3" data-night="2">
             <div class="flex justify-between items-center border-b pb-2 border-slate-100">
                 <span class="text-lg font-black text-sky-600">DAY 2 <span class="text-xs text-slate-500 font-normal">09/14 (一)</span></span>
                 <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">降雨率：<span id="rain-d2">--</span>% | <span id="temp-d2">--</span>°C</span>
@@ -120,6 +147,9 @@
                 <a href="https://maps.google.com/?q=Hotel+Torifito+Naha+Asahibashi" target="_blank" class="font-bold text-slate-800 hover:text-blue-600 text-sm block mb-2">
                     Hotel Torifito Naha Asahibashi (鳥瀨戶那霸旭橋)
                 </a>
+                <div class="text-xs text-slate-600 mb-2">
+                    <b>團員房號：</b> <span id="rooms-night-2" class="text-sky-700">載入中...</span>
+                </div>
                 <div class="grid grid-cols-2 gap-2 text-xs">
                     <a href="https://www.google.com/maps/search/supermarket+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-emerald-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-emerald-700">
                         <i class="fa-solid fa-cart-shopping mr-1"></i>搜尋附近超市
@@ -131,7 +161,8 @@
             </div>
         </section>
 
-        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <!-- DAY 3 -->
+        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3" data-night="3">
             <div class="flex justify-between items-center border-b pb-2 border-slate-100">
                 <span class="text-lg font-black text-sky-600">DAY 3 <span class="text-xs text-slate-500 font-normal">09/15 (二)</span></span>
                 <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">降雨率：<span id="rain-d3">--</span>% | <span id="temp-d3">--</span>°C</span>
@@ -171,6 +202,9 @@
                 <a href="https://maps.google.com/?q=Hotel+Torifito+Naha+Asahibashi" target="_blank" class="font-bold text-slate-800 hover:text-blue-600 text-sm block mb-2">
                     Hotel Torifito Naha Asahibashi (連住第二晚)
                 </a>
+                <div class="text-xs text-slate-600 mb-2">
+                    <b>團員房號：</b> <span id="rooms-night-3" class="text-sky-700">載入中...</span>
+                </div>
                 <div class="grid grid-cols-2 gap-2 text-xs">
                     <a href="https://www.google.com/maps/search/supermarket+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-emerald-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-emerald-700">
                         <i class="fa-solid fa-cart-shopping mr-1"></i>搜尋附近超市
@@ -182,6 +216,7 @@
             </div>
         </section>
 
+        <!-- DAY 4（無住宿） -->
         <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
             <div class="flex justify-between items-center border-b pb-2 border-slate-100">
                 <span class="text-lg font-black text-sky-600">DAY 4 <span class="text-xs text-slate-500 font-normal">09/16 (三)</span></span>
@@ -214,109 +249,11 @@
             <h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-users text-sky-600 mr-2"></i>團體與領隊資訊</h3>
             <ul class="text-sm space-y-2 mt-2">
                 <li><b>團號：</b>26091304D</li>
-                <li><b>領隊：</b>陳連玲 小姐</li>
+                <li><b>領隊：</b>陳達玲 小姐</li>
                 <li><b>電話：</b><a href="tel:0910153719" class="text-blue-600 underline">0910-153-719</a></li>
                 <li><b>旅行社：</b>中來國際旅行社 (03-3347588)</li>
             </ul>
         </div>
 
         <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
-            <h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-plane-up text-sky-600 mr-2"></i>航班時間明細</h3>
-            <div class="space-y-3 mt-3 text-sm">
-                <div class="bg-slate-50 p-2.5 rounded-lg">
-                    <p class="font-bold text-sky-700">去程：中華航空 CI120</p>
-                    <p class="text-xs text-slate-600">日期：2026/09/13 (日)</p>
-                    <p class="text-xs text-slate-600">集合：05:50 桃園二航廈 中華航空7號櫃檯</p>
-                    <p class="text-xs font-semibold text-slate-800 mt-1">起飛 08:15 桃園 ➔ 抵達 10:45 沖繩</p>
-                </div>
-                <div class="bg-slate-50 p-2.5 rounded-lg">
-                    <p class="font-bold text-sky-700">回程：中華航空 CI121</p>
-                    <p class="text-xs text-slate-600">日期：2026/09/16 (三)</p>
-                    <p class="text-xs font-semibold text-slate-800 mt-1">起飛 11:55 沖繩 ➔ 抵達 12:35 桃園</p>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <main id="tab-tools" class="p-4 space-y-4 hidden">
-
-        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
-            <h3 class="font-bold border-b pb-2 text-slate-800 mb-3"><i class="fa-solid fa-link text-sky-600 mr-2"></i>線上預約與申報連結</h3>
-            <div class="grid grid-cols-1 gap-2">
-                <a href="https://www.vjw.digital.go.jp/" target="_blank" class="bg-blue-600 text-white text-center py-2.5 px-4 rounded-xl font-bold shadow flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-passport"></i> 日本 Visit Japan Web (入境申報)
-                </a>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
-            <h3 class="font-bold border-b pb-2 text-slate-800 mb-3"><i class="fa-solid fa-calculator text-sky-600 mr-2"></i>日幣簡單換算器 (概算 0.22)</h3>
-            <div class="flex items-center gap-2 text-sm">
-                <input type="number" id="jpy-input" placeholder="輸入日幣 JPY" oninput="convertCurrency()" class="w-1/2 p-2 border rounded-lg focus:outline-none focus:border-sky-500">
-                <span class="text-lg font-bold">¥ =</span>
-                <span id="twd-output" class="text-lg font-bold text-emerald-600">0 NTD</span>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-2 text-xs text-slate-600">
-            <h3 class="font-bold border-b pb-2 text-slate-800 text-sm"><i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i>日本海關嚴格規定</h3>
-            <p class="text-red-600 font-bold">🚫 嚴禁攜帶任何肉類製品（含含肉餐盒、香腸、真空包裝肉乾）及蔬果入境/入境台灣！違者重罰。</p>
-            <p>🔋 行動電源與鋰電池必須隨身攜帶，嚴禁放進託運行李。</p>
-            <p>🧳 託運行李限重 20 公斤，手提行李限重 7 公斤。</p>
-            <p>🔌 日本電壓為 100V (雙平腳插頭)，台灣電器可直接使用。</p>
-        </div>
-    </main>
-
-    <script>
-        // 切換 Tab 頁面
-        function switchTab(tabName) {
-            document.getElementById('tab-itinerary').classList.add('hidden');
-            document.getElementById('tab-flight').classList.add('hidden');
-            document.getElementById('tab-tools').classList.add('hidden');
-
-            document.getElementById('btn-itinerary').className = "flex-1 py-3 text-slate-500";
-            document.getElementById('btn-flight').className = "flex-1 py-3 text-slate-500";
-            document.getElementById('btn-tools').className = "flex-1 py-3 text-slate-500";
-
-            document.getElementById('tab-' + tabName).classList.remove('hidden');
-            document.getElementById('btn-' + tabName).className = "flex-1 py-3 tab-active";
-        }
-
-        // 匯率換算
-        function convertCurrency() {
-            const jpy = document.getElementById('jpy-input').value;
-            const rate = 0.22; // 設定即時參考匯率
-            const twd = Math.round(jpy * rate);
-            document.getElementById('twd-output').innerText = (twd || 0) + ' NTD';
-        }
-
-        // Open-Meteo API 抓取那霸即時氣象
-        async function fetchWeather() {
-            try {
-                const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=26.2124&longitude=127.6809&daily=temperature_2m_max,precipitation_probability_max&timezone=Asia%2FTokyo');
-                const data = await res.json();
-                
-                if(data && data.daily) {
-                    const temps = data.daily.temperature_2m_max;
-                    const rains = data.daily.precipitation_probability_max;
-                    
-                    document.getElementById('weather-info').innerText = `沖繩今日預測最高溫 ${temps[0]}°C，降雨機率 ${rains[0]}%`;
-                    
-                    // 填入行程各日概況
-                    ['d1', 'd2', 'd3', 'd4'].forEach((day, index) => {
-                        if(temps[index] !== undefined) {
-                            document.getElementById(`temp-${day}`).innerText = temps[index];
-                            document.getElementById(`rain-${day}`).innerText = rains[index];
-                        }
-                    });
-                }
-            } catch (e) {
-                document.getElementById('weather-info').innerText = "沖繩平均氣溫 27~30°C，晴時多雲";
-            }
-        }
-
-        // 頁面載入自動抓取天氣
-        window.onload = fetchWeather;
-    </script>
-</body>
-</html>
+            <h3 class="font-bold border-b pb-2
