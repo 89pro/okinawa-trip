@@ -4,21 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>夏日沖繩經典四日遊行程手冊</title>
+    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        /* 頁籤作用中的樣式 */
         .tab-active { border-bottom: 3px solid #0284c7; color: #0284c7; font-weight: bold; }
-        /* 列印樣式：隱藏按鈕與導航，僅保留內容 */
-        @media print {
-            nav, button, .no-print { display: none !important; }
-            header { position: static; background: white; color: black; }
-            main { display: block !important; }
-        }
+        /* 自定義滾動條以隱藏醜陋的預設樣式，保持乾淨 */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 pb-20 max-w-md mx-auto shadow-2xl min-h-screen relative">
 
+    <!-- 頂部標頭資訊 -->
     <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-4 sticky top-0 z-50 shadow-md">
         <div class="flex justify-between items-center mb-1">
             <span class="bg-orange-500 text-xs px-2 py-0.5 rounded-full font-bold">團號：26091304D</span>
@@ -28,26 +29,25 @@
         <p class="text-xs text-sky-100 mt-1">2026/09/13 (日) ～ 09/16 (三) | 領隊：陳達玲 (0910-153-719)</p>
     </header>
 
-    <nav class="flex bg-white shadow-sm border-b sticky top-[73px] z-40 text-center text-sm font-medium">
-        <button onclick="switchTab('itinerary')" id="btn-itinerary" class="flex-1 py-3 tab-active"><i class="fa-solid fa-calendar-day mr-1"></i>每日行程</button>
-        <button onclick="switchTab('flight')" id="btn-flight" class="flex-1 py-3 text-slate-500"><i class="fa-solid fa-plane-departure mr-1"></i>航班/集合</button>
-        <button onclick="switchTab('tools')" id="btn-tools" class="flex-1 py-3 text-slate-500"><i class="fa-solid fa-toolbox mr-1"></i>小工具/須知</button>
-        <button onclick="switchTab('prep')" id="btn-prep" class="flex-1 py-3 text-slate-500"><i class="fa-solid fa-suitcase mr-1"></i>出發準備</button>
+    <!-- 導覽列：微調字體大小與排版以容納四個頁籤 -->
+    <nav class="flex bg-white shadow-sm border-b sticky top-[73px] z-40 text-center text-xs font-medium">
+        <button onclick="switchTab('itinerary')" id="btn-itinerary" class="flex-1 py-3 tab-active flex flex-col items-center gap-1"><i class="fa-solid fa-calendar-day text-sm"></i>每日行程</button>
+        <button onclick="switchTab('checklist')" id="btn-checklist" class="flex-1 py-3 text-slate-500 flex flex-col items-center gap-1"><i class="fa-solid fa-list-check text-sm"></i>行前準備</button>
+        <button onclick="switchTab('flight')" id="btn-flight" class="flex-1 py-3 text-slate-500 flex flex-col items-center gap-1"><i class="fa-solid fa-plane-departure text-sm"></i>航班集合</button>
+        <button onclick="switchTab('tools')" id="btn-tools" class="flex-1 py-3 text-slate-500 flex flex-col items-center gap-1"><i class="fa-solid fa-toolbox text-sm"></i>工具須知</button>
     </nav>
 
-    <main id="tab-itinerary" class="p-4 space-y-6">
-
-        <!-- 房號管理區（可編輯） -->
-        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
-            <div class="flex justify-between items-center mb-2">
-                <h3 class="font-bold text-sky-700"><i class="fa-solid fa-bed mr-2"></i>團員房號分配</h3>
-                <button onclick="toggleRoomEdit()" id="room-edit-btn" class="text-xs bg-sky-600 text-white px-2 py-1 rounded hover:bg-sky-700">
-                    <i class="fa-solid fa-pen"></i> 編輯
-                </button>
-            </div>
-            <p class="text-xs text-slate-500 mb-2">共 21 間房，請依實際分配填寫。資料會自動儲存於本裝置。</p>
-            <div id="room-list" class="grid grid-cols-3 gap-2 text-xs">
-                <!-- 動態生成房號輸入框 -->
+    <!-- 頁籤 1：每日行程 -->
+    <main id="tab-itinerary" class="p-4 space-y-5">
+        
+        <!-- 新增功能：可折疊的動態房號編輯區，解決版面過長問題 -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <button onclick="toggleRoomList()" class="w-full p-3 flex justify-between items-center bg-sky-50 text-sky-800 font-bold text-sm">
+                <span><i class="fa-solid fa-bed mr-2"></i>團員房號分配表 (21間)</span>
+                <i class="fa-solid fa-chevron-down transition-transform duration-300" id="room-toggle-icon"></i>
+            </button>
+            <div id="room-list-container" class="hidden p-3 max-h-80 overflow-y-auto space-y-2 bg-white">
+                <!-- 房號列表由 JavaScript 動態生成與載入 localStorage -->
             </div>
         </div>
 
@@ -56,11 +56,11 @@
                 <p class="font-bold text-sky-800"><i class="fa-solid fa-cloud-sun-rain text-sky-600 mr-1"></i>沖繩實時天氣資訊</p>
                 <p class="text-slate-600 mt-0.5" id="weather-info">載入今日氣象中...</p>
             </div>
-            <button onclick="fetchWeather()" class="bg-sky-600 text-white px-2.5 py-1 rounded-lg text-xs shadow hover:bg-sky-700">更新天氣</button>
+            <button onclick="fetchWeather()" class="bg-sky-600 text-white px-2.5 py-1 rounded-lg text-xs shadow hover:bg-sky-700">更新</button>
         </div>
 
         <!-- DAY 1 -->
-        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3" data-night="1">
+        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
             <div class="flex justify-between items-center border-b pb-2 border-slate-100">
                 <span class="text-lg font-black text-sky-600">DAY 1 <span class="text-xs text-slate-500 font-normal">09/13 (日)</span></span>
                 <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">降雨率：<span id="rain-d1">--</span>% | <span id="temp-d1">--</span>°C</span>
@@ -71,20 +71,14 @@
                     <p class="text-xs text-slate-400">05:50 集合 | 08:15 起飛</p>
                     <p class="font-bold">桃園機場 ➔ 沖繩那霸空港 (CI120)</p>
                 </div>
-                
                 <div class="border-l-2 border-sky-500 pl-3">
                     <p class="text-xs text-slate-400">11:00 抵達後前往</p>
-                    <a href="https://maps.google.com/?q=波上宮" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
-                        <i class="fa-solid fa-location-dot mr-1"></i>波之上神宮
-                    </a>
+                    <a href="https://maps.google.com/?q=波上宮" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800"><i class="fa-solid fa-location-dot mr-1"></i>波之上神宮</a>
                     <p class="text-xs text-slate-500">懸崖上的琉球神社，祈求旅途平安。</p>
                 </div>
-
                 <div class="border-l-2 border-sky-500 pl-3">
                     <p class="text-xs text-slate-400">下午行程</p>
-                    <a href="https://maps.google.com/?q=瀬長島ウミカジテラス" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
-                        <i class="fa-solid fa-location-dot mr-1"></i>瀨長島 Umikaji Terrace
-                    </a>
+                    <a href="https://maps.google.com/?q=瀬長島ウミカジテラス" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800"><i class="fa-solid fa-location-dot mr-1"></i>瀨長島 Umikaji Terrace</a>
                     <p class="text-xs text-slate-500">複合型屋台村，擁有沖繩小希臘美譽。</p>
                 </div>
             </div>
@@ -94,166 +88,317 @@
             </div>
 
             <div class="mt-4 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl">
-                <p class="text-xs text-slate-500 font-bold mb-1"><i class="fa-solid fa-hotel text-slate-600 mr-1"></i>當晚住宿飯店：</p>
-                <a href="https://maps.google.com/?q=TWIN-LINE+HOTEL+YANBARU+OKINAWA" target="_blank" class="font-bold text-slate-800 hover:text-blue-600 text-sm block mb-2">
-                    TWIN-LINE HOTEL YANBARU OKINAWA
-                </a>
-                <!-- 動態顯示該晚房號 -->
-                <div class="text-xs text-slate-600 mb-2">
-                    <b>團員房號：</b> <span id="rooms-night-1" class="text-sky-700">載入中...</span>
+                <p class="text-xs text-slate-500 font-bold mb-1"><i class="fa-solid fa-hotel text-slate-600 mr-1"></i>住宿飯店：</p>
+                <div class="flex justify-between items-start mb-2">
+                    <a href="https://maps.google.com/?q=TWIN-LINE+HOTEL+YANBARU+OKINAWA" target="_blank" class="font-bold text-slate-800 hover:text-blue-600 text-sm leading-tight">TWIN-LINE HOTEL YANBARU OKINAWA</a>
+                    <!-- 擴充功能：一鍵複製飯店地址 -->
+                    <button onclick="copyText('沖縄県名護市字幸喜108')" class="text-xs bg-slate-200 px-2 py-1 rounded text-slate-600 hover:bg-slate-300 ml-2 shrink-0"><i class="fa-regular fa-copy"></i> 複製地址</button>
                 </div>
                 <div class="grid grid-cols-2 gap-2 text-xs">
-                    <a href="https://www.google.com/maps/search/supermarket+near+TWIN-LINE+HOTEL+YANBARU+OKINAWA" target="_blank" class="bg-emerald-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-emerald-700">
-                        <i class="fa-solid fa-cart-shopping mr-1"></i>搜尋附近超市
-                    </a>
-                    <a href="https://www.google.com/maps/search/laundromat+near+TWIN-LINE+HOTEL+YANBARU+OKINAWA" target="_blank" class="bg-indigo-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-indigo-700">
-                        <i class="fa-solid fa-jug-detergent mr-1"></i>搜尋自助洗衣
-                    </a>
+                    <a href="https://www.google.com/maps/search/supermarket+near+TWIN-LINE+HOTEL+YANBARU+OKINAWA" target="_blank" class="bg-emerald-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-emerald-700"><i class="fa-solid fa-cart-shopping mr-1"></i>附近超市</a>
+                    <a href="https://www.google.com/maps/search/laundromat+near+TWIN-LINE+HOTEL+YANBARU+OKINAWA" target="_blank" class="bg-indigo-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-indigo-700"><i class="fa-solid fa-jug-detergent mr-1"></i>自助洗衣</a>
                 </div>
             </div>
         </section>
 
         <!-- DAY 2 -->
-        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3" data-night="2">
+        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
             <div class="flex justify-between items-center border-b pb-2 border-slate-100">
                 <span class="text-lg font-black text-sky-600">DAY 2 <span class="text-xs text-slate-500 font-normal">09/14 (一)</span></span>
                 <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">降雨率：<span id="rain-d2">--</span>% | <span id="temp-d2">--</span>°C</span>
             </div>
-
             <div class="space-y-3 text-sm">
                 <div class="border-l-2 border-sky-500 pl-3">
                     <p class="text-xs text-slate-400">約 08:30 飯店出發</p>
-                    <a href="https://maps.google.com/?q=備瀬のフクギ並木" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
-                        <i class="fa-solid fa-location-dot mr-1"></i>備瀨福木林道
-                    </a>
-                    <p class="text-xs text-slate-500">治癒系防風林大道，散步吸取芬多精。</p>
+                    <a href="https://maps.google.com/?q=備瀬のフクギ並木" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800"><i class="fa-solid fa-location-dot mr-1"></i>備瀨福木林道</a>
                 </div>
-
                 <div class="border-l-2 border-sky-500 pl-3">
                     <p class="text-xs text-slate-400">重點景點</p>
-                    <a href="https://maps.google.com/?q=沖繩海洋博公園" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
-                        <i class="fa-solid fa-location-dot mr-1"></i>沖繩海洋博公園 + 美之海水族館
-                    </a>
-                    <p class="text-xs text-slate-500">包含水族館門票與海豚表演秀（午餐自理 ￥3500）。</p>
+                    <a href="https://maps.google.com/?q=沖繩海洋博公園" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800"><i class="fa-solid fa-location-dot mr-1"></i>沖繩海洋博公園 + 美之海水族館</a>
+                    <p class="text-xs text-slate-500">包含水族館門票與海豚表演秀（午餐自理）。</p>
                 </div>
             </div>
-
-            <div class="bg-amber-50 p-2.5 rounded-lg text-xs text-amber-800 border border-amber-200">
-                <i class="fa-solid fa-circle-exclamation mr-1"></i><b>注意事項：</b>水族館園區較大，請隨身攜帶防曬用品與充足飲水，留意海豚秀時間。
-            </div>
-
             <div class="mt-4 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl">
-                <p class="text-xs text-slate-500 font-bold mb-1"><i class="fa-solid fa-hotel text-slate-600 mr-1"></i>當晚住宿飯店：</p>
-                <a href="https://maps.google.com/?q=Hotel+Torifito+Naha+Asahibashi" target="_blank" class="font-bold text-slate-800 hover:text-blue-600 text-sm block mb-2">
-                    Hotel Torifito Naha Asahibashi (鳥瀨戶那霸旭橋)
-                </a>
-                <div class="text-xs text-slate-600 mb-2">
-                    <b>團員房號：</b> <span id="rooms-night-2" class="text-sky-700">載入中...</span>
+                <p class="text-xs text-slate-500 font-bold mb-1"><i class="fa-solid fa-hotel text-slate-600 mr-1"></i>住宿飯店：</p>
+                <div class="flex justify-between items-start mb-2">
+                    <a href="https://maps.google.com/?q=Hotel+Torifito+Naha+Asahibashi" target="_blank" class="font-bold text-slate-800 hover:text-blue-600 text-sm leading-tight">Hotel Torifito Naha Asahibashi</a>
+                    <button onclick="copyText('沖縄県那覇市西1-11-19')" class="text-xs bg-slate-200 px-2 py-1 rounded text-slate-600 hover:bg-slate-300 ml-2 shrink-0"><i class="fa-regular fa-copy"></i> 複製地址</button>
                 </div>
                 <div class="grid grid-cols-2 gap-2 text-xs">
-                    <a href="https://www.google.com/maps/search/supermarket+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-emerald-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-emerald-700">
-                        <i class="fa-solid fa-cart-shopping mr-1"></i>搜尋附近超市
-                    </a>
-                    <a href="https://www.google.com/maps/search/laundromat+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-indigo-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-indigo-700">
-                        <i class="fa-solid fa-jug-detergent mr-1"></i>搜尋自助洗衣
-                    </a>
+                    <a href="https://www.google.com/maps/search/supermarket+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-emerald-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-emerald-700"><i class="fa-solid fa-cart-shopping mr-1"></i>附近超市</a>
+                    <a href="https://www.google.com/maps/search/laundromat+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-indigo-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-indigo-700"><i class="fa-solid fa-jug-detergent mr-1"></i>自助洗衣</a>
                 </div>
             </div>
         </section>
 
         <!-- DAY 3 -->
-        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3" data-night="3">
+        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
             <div class="flex justify-between items-center border-b pb-2 border-slate-100">
                 <span class="text-lg font-black text-sky-600">DAY 3 <span class="text-xs text-slate-500 font-normal">09/15 (二)</span></span>
                 <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">降雨率：<span id="rain-d3">--</span>% | <span id="temp-d3">--</span>°C</span>
             </div>
-
             <div class="space-y-3 text-sm">
                 <div class="border-l-2 border-sky-500 pl-3">
                     <p class="text-xs text-slate-400">上午行程</p>
-                    <a href="https://maps.google.com/?q=玉泉洞+文化王國" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
-                        <i class="fa-solid fa-location-dot mr-1"></i>玉泉洞 + 文化王國村
-                    </a>
-                    <p class="text-xs text-slate-500">三大鐘乳石洞、琉球大鼓秀表演（午餐：Orion Hotel 自助餐 ￥4000）。</p>
+                    <a href="https://maps.google.com/?q=玉泉洞+文化王國" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800"><i class="fa-solid fa-location-dot mr-1"></i>玉泉洞 + 文化王國村</a>
                 </div>
-
                 <div class="border-l-2 border-sky-500 pl-3">
-                    <p class="text-xs text-slate-400">下午購物行程</p>
-                    <a href="https://maps.google.com/?q=PARCO+CITY" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
-                        <i class="fa-solid fa-location-dot mr-1"></i>PARCO CITY 沖繩最大購物中心
-                    </a>
+                    <p class="text-xs text-slate-400">下午購物</p>
+                    <a href="https://maps.google.com/?q=PARCO+CITY" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800"><i class="fa-solid fa-location-dot mr-1"></i>PARCO CITY 沖繩最大購物中心</a>
                 </div>
-
                 <div class="border-l-2 border-sky-500 pl-3">
                     <p class="text-xs text-slate-400">晚上行程</p>
-                    <a href="https://maps.google.com/?q=國際通" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
-                        <i class="fa-solid fa-location-dot mr-1"></i>國際大道逛街購物
-                    </a>
-                    <p class="text-xs text-slate-500">晚餐：琉球風味套餐 / 美山涮涮鍋吃到飽。</p>
+                    <a href="https://maps.google.com/?q=國際通" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800"><i class="fa-solid fa-location-dot mr-1"></i>國際大道逛街購物</a>
                 </div>
             </div>
-
-            <div class="bg-amber-50 p-2.5 rounded-lg text-xs text-amber-800 border border-amber-200">
-                <i class="fa-solid fa-circle-exclamation mr-1"></i><b>注意事項：</b>玉泉洞內步道較潮濕滑溜，請穿著防滑平底鞋；國際通購物請注意集合時間。
-            </div>
-
             <div class="mt-4 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl">
-                <p class="text-xs text-slate-500 font-bold mb-1"><i class="fa-solid fa-hotel text-slate-600 mr-1"></i>當晚住宿飯店：</p>
-                <a href="https://maps.google.com/?q=Hotel+Torifito+Naha+Asahibashi" target="_blank" class="font-bold text-slate-800 hover:text-blue-600 text-sm block mb-2">
-                    Hotel Torifito Naha Asahibashi (連住第二晚)
-                </a>
-                <div class="text-xs text-slate-600 mb-2">
-                    <b>團員房號：</b> <span id="rooms-night-3" class="text-sky-700">載入中...</span>
-                </div>
-                <div class="grid grid-cols-2 gap-2 text-xs">
-                    <a href="https://www.google.com/maps/search/supermarket+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-emerald-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-emerald-700">
-                        <i class="fa-solid fa-cart-shopping mr-1"></i>搜尋附近超市
-                    </a>
-                    <a href="https://www.google.com/maps/search/laundromat+near+Hotel+Torifito+Naha+Asahibashi" target="_blank" class="bg-indigo-600 text-white py-1.5 px-2 rounded-lg text-center font-medium shadow hover:bg-indigo-700">
-                        <i class="fa-solid fa-jug-detergent mr-1"></i>搜尋自助洗衣
-                    </a>
-                </div>
+                <p class="text-xs text-slate-500 font-bold mb-1"><i class="fa-solid fa-hotel text-slate-600 mr-1"></i>住宿飯店：</p>
+                <p class="font-bold text-slate-800 text-sm">Hotel Torifito Naha Asahibashi (連住第二晚)</p>
             </div>
         </section>
 
-        <!-- DAY 4（無住宿） -->
+        <!-- DAY 4 -->
         <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
             <div class="flex justify-between items-center border-b pb-2 border-slate-100">
                 <span class="text-lg font-black text-sky-600">DAY 4 <span class="text-xs text-slate-500 font-normal">09/16 (三)</span></span>
                 <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">降雨率：<span id="rain-d4">--</span>% | <span id="temp-d4">--</span>°C</span>
             </div>
-
             <div class="space-y-3 text-sm">
                 <div class="border-l-2 border-sky-500 pl-3">
-                    <p class="text-xs text-slate-400">飯店早餐後</p>
-                    <p class="font-bold">整理行李與退房辦理</p>
-                </div>
-
-                <div class="border-l-2 border-sky-500 pl-3">
                     <p class="text-xs text-slate-400">預計 09:30 抵達機場</p>
-                    <a href="https://maps.google.com/?q=那霸空港" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800">
-                        <i class="fa-solid fa-location-dot mr-1"></i>那霸空港 ➔ 桃園國際機場 (CI121)
-                    </a>
+                    <a href="https://maps.google.com/?q=那霸空港" target="_blank" class="font-bold text-blue-600 underline hover:text-blue-800"><i class="fa-solid fa-location-dot mr-1"></i>那霸空港 ➔ 桃園國際機場 (CI121)</a>
                     <p class="text-xs text-slate-500">11:55 起飛 / 12:35 抵達台灣。</p>
                 </div>
             </div>
-
-            <div class="bg-amber-50 p-2.5 rounded-lg text-xs text-amber-800 border border-amber-200">
-                <i class="fa-solid fa-circle-exclamation mr-1"></i><b>注意事項：</b>托运行李限重 20kg，隨身行李 7kg，切勿攜帶肉類製品或違禁品返台。
+            <div class="bg-red-50 p-2.5 rounded-lg text-xs text-red-800 border border-red-200 font-bold">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i>切勿攜帶任何肉類製品（含泡麵肉塊、真空包裝）返台，違者重罰20萬！
             </div>
         </section>
     </main>
 
+    <!-- 頁籤 2：行前準備與注意事項 (新增功能) -->
+    <main id="tab-checklist" class="p-4 space-y-4 hidden">
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-indigo-800 text-xs shadow-sm">
+            <p><i class="fa-solid fa-circle-info mr-1"></i> 以下清單可點擊打勾，系統會自動儲存於您的手機中，方便隨時核對進度。</p>
+        </div>
+        
+        <!-- 動態渲染清單的容器 -->
+        <div id="checklist-container" class="space-y-4"></div>
+    </main>
+
+    <!-- 頁籤 3：航班/集合 -->
     <main id="tab-flight" class="p-4 space-y-4 hidden">
         <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
             <h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-users text-sky-600 mr-2"></i>團體與領隊資訊</h3>
             <ul class="text-sm space-y-2 mt-2">
                 <li><b>團號：</b>26091304D</li>
                 <li><b>領隊：</b>陳達玲 小姐</li>
-                <li><b>電話：</b><a href="tel:0910153719" class="text-blue-600 underline">0910-153-719</a></li>
+                <li><b>電話：</b><a href="tel:0910153719" class="text-blue-600 underline font-bold">0910-153-719</a></li>
                 <li><b>旅行社：</b>中來國際旅行社 (03-3347588)</li>
             </ul>
         </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-plane-up text-sky-600 mr-2"></i>航班時間明細</h3>
+            <div class="space-y-3 mt-3 text-sm">
+                <div class="bg-slate-50 p-2.5 rounded-lg border">
+                    <p class="font-bold text-sky-700">去程：中華航空 CI120</p>
+                    <p class="text-xs text-slate-600">集合：09/13 (日) 05:50 桃機二航 7號櫃檯</p>
+                    <p class="text-xs font-semibold text-slate-800 mt-1">起飛 08:15 ➔ 抵達 10:45 沖繩</p>
+                </div>
+                <div class="bg-slate-50 p-2.5 rounded-lg border">
+                    <p class="font-bold text-sky-700">回程：中華航空 CI121</p>
+                    <p class="text-xs text-slate-600">日期：09/16 (三)</p>
+                    <p class="text-xs font-semibold text-slate-800 mt-1">起飛 11:55 ➔ 抵達 12:35 桃園</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 頁籤 4：小工具/須知 -->
+    <main id="tab-tools" class="p-4 space-y-4 hidden">
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <h3 class="font-bold border-b pb-2 text-slate-800 mb-3"><i class="fa-solid fa-link text-sky-600 mr-2"></i>線上申報</h3>
+            <a href="https://www.vjw.digital.go.jp/" target="_blank" class="bg-blue-600 text-white text-center py-2.5 px-4 rounded-xl font-bold shadow flex items-center justify-center gap-2">
+                <i class="fa-solid fa-passport"></i> Visit Japan Web (入境申報)
+            </a>
+        </div>
 
         <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
-            <h3 class="font-bold border-b pb-2
+            <h3 class="font-bold border-b pb-2 text-slate-800 mb-3"><i class="fa-solid fa-calculator text-sky-600 mr-2"></i>日幣概算 (匯率 0.22)</h3>
+            <div class="flex items-center gap-2 text-sm">
+                <input type="number" id="jpy-input" placeholder="輸入日幣 JPY" oninput="convertCurrency()" class="w-1/2 p-2 border rounded-lg focus:outline-none focus:border-sky-500">
+                <span class="text-lg font-bold">¥ =</span>
+                <span id="twd-output" class="text-lg font-bold text-emerald-600">0 NTD</span>
+            </div>
+        </div>
+
+        <!-- 新增擴充：緊急聯絡與求助 -->
+        <div class="bg-red-50 rounded-2xl p-4 shadow-sm border border-red-200">
+            <h3 class="font-bold border-b border-red-200 pb-2 text-red-800 mb-2"><i class="fa-solid fa-truck-medical mr-2"></i>緊急求助聯絡資訊</h3>
+            <ul class="text-xs space-y-2 text-red-700">
+                <li><b>日本報案：</b><a href="tel:110" class="underline font-bold text-red-600">110</a> | <b>火警/救護車：</b><a href="tel:119" class="underline font-bold text-red-600">119</a></li>
+                <li><b>旅外國人急難救助專線：</b><br>在日直撥 <a href="tel:0800-0885-0885" class="underline font-bold text-red-600">0800-0885-0885</a></li>
+                <li><b>駐那霸辦事處緊急電話：</b><br><a href="tel:+81-90-1942-1107" class="underline font-bold text-red-600">090-1942-1107</a> (境內撥打)</li>
+            </ul>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-2 text-xs text-slate-600">
+            <h3 class="font-bold border-b pb-2 text-slate-800 text-sm"><i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i>日本海關與行李規定</h3>
+            <p class="text-red-600 font-bold">🚫 嚴禁攜帶任何肉類製品及新鮮蔬果入境台日！</p>
+            <p>🔋 行動電源、打火機(限1個) 必須【隨身攜帶】，不可託運。</p>
+            <p>🧳 託運行李限重 20 公斤，手提限 7 公斤 (限2件)。</p>
+            <p>🔌 膏狀/液體超過 100ml 必須放進託運行李。</p>
+        </div>
+    </main>
+
+    <!-- 頁面邏輯腳本 -->
+    <script>
+        // 核心邏輯：本地儲存鍵值設定 (確保不同團號不互相污染)
+        const STORAGE_KEY_ROOMS = 'tour_26091304D_rooms';
+        const STORAGE_KEY_CHECKLIST = 'tour_26091304D_checklist';
+
+        // 頁籤切換邏輯
+        function switchTab(tabName) {
+            ['itinerary', 'flight', 'tools', 'checklist'].forEach(tab => {
+                document.getElementById('tab-' + tab).classList.add('hidden');
+                let btn = document.getElementById('btn-' + tab);
+                btn.classList.remove('tab-active', 'text-slate-500');
+                if(tab === tabName) {
+                    btn.classList.add('tab-active');
+                } else {
+                    btn.classList.add('text-slate-500');
+                }
+            });
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+        }
+
+        // ==================== 房間分配邏輯 ====================
+        function initRooms() {
+            const container = document.getElementById('room-list-container');
+            const savedData = JSON.parse(localStorage.getItem(STORAGE_KEY_ROOMS)) || {};
+            let html = '';
+            for(let i = 1; i <= 21; i++) {
+                const val = savedData[`room_${i}`] || '';
+                html += `
+                    <div class="flex items-center text-sm border-b border-slate-100 pb-2">
+                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1 px-2 rounded text-center mr-2">房間 ${i}</span>
+                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded focus:outline-none focus:border-sky-500 text-sm" placeholder="輸入房號與姓名 (例: 501 陳大明)">
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+
+        function saveRoom(index) {
+            const savedData = JSON.parse(localStorage.getItem(STORAGE_KEY_ROOMS)) || {};
+            savedData[`room_${index}`] = document.getElementById(`room_input_${index}`).value;
+            localStorage.setItem(STORAGE_KEY_ROOMS, JSON.stringify(savedData));
+        }
+
+        function toggleRoomList() {
+            const container = document.getElementById('room-list-container');
+            const icon = document.getElementById('room-toggle-icon');
+            if(container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                container.classList.add('hidden');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        // ==================== 行前清單邏輯 ====================
+        const checklistItems = [
+            { category: "證件與財務", items: ["護照正本 (效期大於6個月)", "護照影本與2吋照片2張 (備用)", "信用卡 (需開通海外刷卡)", "日幣現金"] },
+            { category: "電子與通訊", items: ["手機與充電線", "行動電源 (需隨身不可託運)", "萬用轉接頭 (視需求)", "日本上網 SIM卡 / WiFi機"] },
+            { category: "衣物與日用品", items: ["換洗衣物 (4天3夜)", "薄外套 (防曬/車內冷氣)", "好走的平底鞋/運動鞋", "個人盥洗包 (牙刷/刮鬍刀等)", "晴雨兩用傘"] },
+            { category: "個人藥品", items: ["腸胃藥 / 暈車藥", "感冒藥 / 止痛藥", "個人慢性處方藥物", "OK繃 / 蚊蟲藥"] }
+        ];
+
+        function initChecklist() {
+            const container = document.getElementById('checklist-container');
+            const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY_CHECKLIST)) || {};
+            let html = '';
+
+            checklistItems.forEach((group, gIndex) => {
+                html += `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3"><h4 class="font-bold text-slate-700 border-b pb-1 mb-2 text-sm">${group.category}</h4><div class="space-y-2">`;
+                group.items.forEach((item, iIndex) => {
+                    const key = `chk_${gIndex}_${iIndex}`;
+                    const isChecked = savedState[key] ? 'checked' : '';
+                    const lineThrough = savedState[key] ? 'line-through text-slate-400' : 'text-slate-700';
+                    html += `
+                        <label class="flex items-start gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" id="${key}" ${isChecked} onchange="saveChecklist('${key}')" class="mt-1 w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500">
+                            <span id="label_${key}" class="${lineThrough} transition-all duration-200">${item}</span>
+                        </label>
+                    `;
+                });
+                html += `</div></div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function saveChecklist(key) {
+            const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY_CHECKLIST)) || {};
+            const isChecked = document.getElementById(key).checked;
+            savedState[key] = isChecked;
+            localStorage.setItem(STORAGE_KEY_CHECKLIST, JSON.stringify(savedState));
+            
+            // 即時更新樣式
+            const label = document.getElementById(`label_${key}`);
+            if(isChecked) {
+                label.classList.add('line-through', 'text-slate-400');
+                label.classList.remove('text-slate-700');
+            } else {
+                label.classList.remove('line-through', 'text-slate-400');
+                label.classList.add('text-slate-700');
+            }
+        }
+
+        // ==================== 共用輔助邏輯 ====================
+        // 一鍵複製文字功能
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('已複製地址：' + text);
+            }).catch(err => {
+                alert('複製失敗，請手動複製。');
+            });
+        }
+
+        // 匯率換算
+        function convertCurrency() {
+            const jpy = document.getElementById('jpy-input').value;
+            const twd = Math.round(jpy * 0.22);
+            document.getElementById('twd-output').innerText = (twd || 0) + ' NTD';
+        }
+
+        // 抓取天氣 API
+        async function fetchWeather() {
+            try {
+                const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=26.2124&longitude=127.6809&daily=temperature_2m_max,precipitation_probability_max&timezone=Asia%2FTokyo');
+                const data = await res.json();
+                if(data && data.daily) {
+                    const temps = data.daily.temperature_2m_max;
+                    const rains = data.daily.precipitation_probability_max;
+                    document.getElementById('weather-info').innerText = `預測最高溫 ${temps[0]}°C，降雨機率 ${rains[0]}%`;
+                    ['d1', 'd2', 'd3', 'd4'].forEach((day, index) => {
+                        if(temps[index] !== undefined) {
+                            document.getElementById(`temp-${day}`).innerText = temps[index];
+                            document.getElementById(`rain-${day}`).innerText = rains[index];
+                        }
+                    });
+                }
+            } catch (e) {
+                document.getElementById('weather-info').innerText = "平均氣溫 27~30°C，晴時多雲";
+            }
+        }
+
+        // 頁面初始化執行
+        window.onload = function() {
+            fetchWeather();
+            initRooms();
+            initChecklist();
+        };
+    </script>
+</body>
+</html>
