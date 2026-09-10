@@ -54,7 +54,7 @@
         <!-- 動態房號編輯區：折疊式設計以節省空間 -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <button onclick="toggleRoomList()" class="w-full p-3 flex justify-between items-center bg-sky-50 text-sky-800 font-bold text-sm hover:bg-sky-100 transition-colors">
-                <span><i class="fa-solid fa-bed mr-2"></i>團員房號分配表 (21間)</span>
+                <span><i class="fa-solid fa-bed mr-2"></i>團員房號分配表</span>
                 <i class="fa-solid fa-chevron-down transition-transform duration-300" id="room-toggle-icon"></i>
             </button>
             <div id="room-list-container" class="hidden p-3 max-h-80 overflow-y-auto space-y-2 bg-white">
@@ -351,65 +351,41 @@
         // ------------------------- 房間分配邏輯 -------------------------
         function initRooms() {
             const container = document.getElementById('room-list-container');
+            // 若 localStorage 無資料則預設為空物件
             const savedData = JSON.parse(localStorage.getItem(STORAGE_KEY_ROOMS)) || {};
+                
+            // 1. 將名單抽象化為陣列資料，徹底分離資料與視圖
+            const members = [
+                "林X塗", "林X福", "林X雄", "吳X宏", "吳X裕", 
+                "吳X富", "王X麗", "江X霞", "陳X原", "黃X仁", 
+                "游X順", "劉X垣", "林X早", "領隊-陳X玲", "導遊"
+            ];
+                
             let html = '';
-            //for(let i = 1; i <= 12; i++) {
-                const val = savedData[`room_${i}`] || '';
+                
+            // 2. 透過迴圈動態渲染，確保變數正確映射
+            members.forEach((name, index) => {
+                // 陣列索引從 0 開始，但房號 id 需要從 1 開始
+                const roomId = index + 1;
+                
+                // 3. 正確使用變數讀取資料
+                const roomKey = `room_${roomId}`;
+                const roomValue = savedData[roomKey] || '';
+            
+                // 4. 正確使用 ${} 語法將變數嵌入 HTML 模板字串中
                 html += `
                     <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">林X塗</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">林X福</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">林X雄</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">吳X宏</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">吳X裕</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">吳X富</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">王X麗</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">江X霞</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">陳X原</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">黃X仁</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">游X順</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">劉X垣</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
-                    </div>
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">林X早</span>
-                        <input type="text" id="room_input_${i}" value="${val}" oninput="saveRoom(${i})" class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm transition-shadow" placeholder="房號">
+                        <span class="w-16 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2">${name}</span>
+                        <input type="text" 
+                               id="room_input_${roomId}" 
+                               value="${roomValue}" 
+                               oninput="saveRoom(${roomId})" 
+                               class="flex-1 p-1.5 border border-slate-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500       text-sm transition-shadow" 
+                               placeholder="房號">
                     </div>
                 `;
-            //}
+            });
+        
             container.innerHTML = html;
         }
 
