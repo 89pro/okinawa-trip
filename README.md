@@ -1,88 +1,50 @@
-# 26091304D 沖繩旅遊網站｜GitHub-only 版本
+# 沖繩旅遊網站：GitHub + Google Apps Script（無資料庫）
 
-本版本不使用 Cloudflare、不使用資料庫。導遊不需要 GitHub 帳號，也不需要懂程式。
+## 架構
+- `index.html`：固定 UI 與視圖。
+- `data/tour.json`：旅遊內容與 Google Apps Script Web App URL。
+- `data/rooms.txt`：公開共同房號與導遊密碼；**不放 GitHub Token**。
+- `Code.gs`：Google Apps Script Web App；GitHub Token 僅放在 Script Properties。
 
-## GitHub Repository 結構
-
-```text
+## 1. GitHub
+將下列檔案放入 Repository：
+```
 index.html
-README.md
-data/
-  tour.json
-  rooms.txt
+data/tour.json
+data/rooms.txt
 ```
 
-## 導遊操作方式
+## 2. Google Apps Script Script Properties
+在 Apps Script：Project Settings → Script properties，新增：
+- `GITHUB_TOKEN` = GitHub Fine-grained PAT
+- `GITHUB_OWNER` = `89pro`
+- `GITHUB_REPO` = `okinawa-trip`
+- `GITHUB_BRANCH` = `main`
+- `ROOMS_PATH` = `data/rooms.txt`
 
-1. 開啟旅遊網站。
-2. 點「團員房號分配表」展開。
-3. 點右下角「導遊密碼」。
-4. 輸入 `data/rooms.txt` 中的 `GUIDE_PASSWORD`。
-5. 密碼正確後，一次編輯全部團員房號。
-6. 點「儲存全部房號」。
-7. 網頁會直接將 `rooms.txt` Commit 回 GitHub。
-8. 其他團員重新整理或等待約 15 秒即可看到最新房號。
+GitHub Token 建議只授權 `89pro/okinawa-trip`，Repository permission 只給 `Contents: Read and write`，並設較短到期。GitHub 官方的 Contents API 更新既有檔案需要 `sha`，程式會自動取得最新 `sha`。
 
-導遊不需要 GitHub 帳號。
+## 3. Apps Script 程式
+把 `Code.gs` 全部貼入 Apps Script。
 
-## GitHub 一次性設定
+## 4. 部署
+Deploy → New deployment → Web app：
+- Execute as：Me（部署者）
+- Who has access：Anyone
 
-### 1. 建立 `data/rooms.txt`
+部署後複製 `/exec` URL，確認 `data/tour.json` 的 `appsScriptUrl` 相同。
 
-程式已提供範本。
+直接用瀏覽器開啟：
+`https://script.google.com/macros/s/你的部署ID/exec?action=ping`
+應看到 JSON，且 `ok` 為 `true`。
 
-### 2. 建立 Fine-grained Personal Access Token
+## 5. 房號操作
+一般團員：直接查看房號。
+導遊：團員房號分配表 → 導遊密碼 → 輸入正確密碼 → 一次修改全部房號 → 儲存全部房號。
 
-GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens。
-
-建議：
-
-- Repository access：Only selected repository
-- Repository：只選本旅遊 Repository
-- Repository permissions：Contents = Read and write
-- Expiration：設定旅遊結束前後的短期限
-
-### 3. 把 Token 寫入 `data/rooms.txt`
-
-將：
-
-```text
-# GITHUB_TOKEN=YOUR_FINE_GRAINED_GITHUB_TOKEN
-```
-
-改成真正 Token。
-
-### 4. 設定 `data/tour.json`
-
-找到：
-
-```json
-"github": {
-  "owner": "YOUR_GITHUB_OWNER",
-  "repo": "YOUR_GITHUB_REPOSITORY",
-  "branch": "main",
-  "roomsPath": "data/rooms.txt",
-  "apiBase": "https://api.github.com"
-}
-```
-
-只需填入 GitHub 帳號與 Repository 名稱。
-
-### 5. GitHub Pages
-
-將 Repository 的 GitHub Pages 指向 `main` branch / root。
-
-## 安全性說明
-
-這個方案刻意把 Token 放在公開 `rooms.txt`，因為你的需求是「臨時旅遊網站、方便導遊、不要求高安全性」。因此 Token 必須：
-
-- 只授權這一個 Repository
-- 只開 Contents: read/write
-- 設定短期到期
-- 旅遊結束後立即撤銷
-
-不要把此方案拿去正式系統。
-
-## 資料與視圖分離
-
-`index.html` 負責 UI 與呈現；`data/tour.json` 負責旅遊內容；`data/rooms.txt` 負責全團共同房號。下一趟旅遊主要修改資料檔即可沿用同一套 UI。
+## 6. 重要
+- 導遊不需要 GitHub 帳號。
+- 房號查閱不需要 Token。
+- Token 只存在 Apps Script Script Properties。
+- 本方案沒有資料庫。
+- 旅遊結束後可撤銷 GitHub Token 並刪除 Apps Script Web App。
