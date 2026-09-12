@@ -331,7 +331,11 @@
       "那霸辦事處急難：090-1942-1107 (境內撥打)"
     ]
   },
-  "repository": {
-    "roomsEditUrl": "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPOSITORY/edit/main/data/rooms.txt"
+  "github": {
+    "owner": "YOUR_GITHUB_OWNER",
+    "repo": "YOUR_GITHUB_REPOSITORY",
+    "branch": "main",
+    "roomsPath": "data/rooms.txt",
+    "apiBase": "https://api.github.com"
   }
 }

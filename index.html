@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>夏日沖繩經典四日遊行程手冊</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         .tab-active { border-bottom: 3px solid #0284c7; color: #0284c7; font-weight: bold; }
@@ -85,23 +85,30 @@
 
     <script>
         /* ============================================================
-         * 旅遊框架：資料與視圖分離
+         * 旅遊框架：資料與視圖分離 + GitHub 直接共同寫入
          * ------------------------------------------------------------
-         * 1. /data/tour.json：旅遊內容（航班、行程、住宿、團員、工具）
-         * 2. /data/rooms.txt：全團共同房號 + 導遊防誤操作密碼
-         * 3. GitHub Pages：所有人查閱
-         * 4. 純 GitHub：網站只負責讀取與批次整理，真正的修改在 GitHub rooms.txt 由導遊 Commit
-         *
+         * 1. data/tour.json：旅遊資料 + GitHub Repository 設定。
+         * 2. data/rooms.txt：團員房號 + GUIDE_PASSWORD + 暫時性 GitHub Token。
+         * 3. 所有人：只能讀取共同房號。
+         * 4. 導遊：在網站輸入 GUIDE_PASSWORD 後，直接編輯全部團員房號。
+         * 5. 儲存：瀏覽器直接呼叫 GitHub Contents API 更新 rooms.txt。
+         * 6. 不使用資料庫、不需要導遊 GitHub 帳號。
+         * 7. 注意：本方案為臨時旅遊網站，Token 直接放在公開 rooms.txt，
+         *    因此必須使用「只限本 Repository + Contents: write + 短期到期」
+         *    的 Fine-grained token；旅遊結束立即撤銷/刪除。
          * ============================================================ */
-        const DATA_URL_CANDIDATES = ['data/tour.json', 'tour.json'];
-        const ROOMS_URL_CANDIDATES = ['data/rooms.txt', 'rooms.txt'];
+
+        const DATA_URL = 'data/tour.json';
+        const ROOMS_URL = 'data/rooms.txt';
+        const ROOMS_API_FALLBACK = 'https://api.github.com';
         const REFRESH_MS = 15000;
-        const STORAGE_KEY_CHECKLIST = 'tour_26091304D_checklist';
+        const STORAGE_KEY_CHECKLIST_PREFIX = 'tour_checklist_';
 
         let TOUR_DATA = null;
-        let ROOMS_DATA = { members: [], guidePassword: '' };
-        let roomsSourceText = '';
+        let ROOMS_DATA = { members: [], guidePassword: '', githubToken: '' };
         let refreshTimer = null;
+        let guideEditMode = false;
+        let roomSaveBusy = false;
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -118,406 +125,425 @@
 
         async function fetchText(url) {
             const target = new URL(url, document.baseURI);
-            target.searchParams.set('t', String(Date.now()));
+            target.searchParams.set('_ts', Date.now().toString());
             const response = await fetch(target.href, { cache: 'no-store' });
-            if (!response.ok) throw new Error(`HTTP ${response.status}: ${target.href}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.text();
         }
 
-        async function fetchFirstAvailable(candidates) {
-            const errors = [];
-            for (const path of candidates) {
-                try {
-                    const text = await fetchText(path);
-                    return { text, path };
-                } catch (error) {
-                    errors.push(String(error?.message || error));
-                }
-            }
-            throw new Error('所有候選資料檔均無法讀取：\n' + errors.join('\n'));
-        }
-
         async function loadTourData() {
-            const result = await fetchFirstAvailable(DATA_URL_CANDIDATES);
+            const text = await fetchText(DATA_URL);
             try {
-                TOUR_DATA = JSON.parse(result.text);
+                TOUR_DATA = JSON.parse(text);
             } catch (error) {
-                throw new Error(`旅遊資料 JSON 格式錯誤（來源：${result.path}）：${error.message}`);
+                throw new Error('tour.json 格式錯誤：' + error.message);
+            }
+            if (!TOUR_DATA || typeof TOUR_DATA !== 'object') {
+                throw new Error('tour.json 內容不是有效物件。');
             }
         }
 
         function parseRooms(text) {
-            const result = { members: [], guidePassword: '' };
+            const result = { members: [], guidePassword: '', githubToken: '' };
+            const seenIds = new Set();
+
             for (const rawLine of String(text || '').split(/\r?\n/)) {
                 const line = rawLine.trim();
                 if (!line) continue;
 
-                // 導遊密碼依需求直接記錄於 GitHub 文字檔中，僅作為「防君子」的前端提示。
                 if (line.startsWith('#')) {
-                    const m = line.match(/^#\s*GUIDE_PASSWORD\s*=\s*(.*)\s*$/i);
-                    if (m) result.guidePassword = m[1];
+                    let match = line.match(/^#\s*GUIDE_PASSWORD\s*=\s*(.*?)\s*$/i);
+                    if (match) result.guidePassword = match[1];
+                    match = line.match(/^#\s*GITHUB_TOKEN\s*=\s*(.*?)\s*$/i);
+                    if (match) result.githubToken = match[1];
                     continue;
                 }
 
                 const parts = line.split('|');
-                if (parts.length >= 3 && /^\d+$/.test(parts[0].trim())) {
-                    result.members.push({
-                        id: Number(parts[0].trim()),
-                        name: parts[1].trim(),
-                        room: parts.slice(2).join('|').trim()
-                    });
-                }
+                if (parts.length < 3) continue;
+
+                const id = Number(parts[0].trim());
+                const name = parts[1].trim();
+                const room = parts.slice(2).join('|').trim();
+
+                if (!Number.isInteger(id) || id < 1 || !name || seenIds.has(id)) continue;
+                seenIds.add(id);
+                result.members.push({ id, name, room });
             }
+
+            result.members.sort((a, b) => a.id - b.id);
             return result;
         }
 
         function normalizeMembers() {
             const dataMembers = Array.isArray(TOUR_DATA?.members) ? TOUR_DATA.members : [];
-            const parsed = new Map(ROOMS_DATA.members.map(m => [m.id, m]));
-            return dataMembers.map(m => ({
-                ...m,
-                room: parsed.get(Number(m.id))?.room || ''
-            }));
+            const roomsMap = new Map(ROOMS_DATA.members.map(member => [Number(member.id), member.room]));
+
+            return dataMembers.map((member, index) => {
+                const id = Number(member.id ?? index + 1);
+                return {
+                    ...member,
+                    id,
+                    room: roomsMap.get(id) ?? ''
+                };
+            });
+        }
+
+        function githubConfig() {
+            const config = TOUR_DATA?.github || {};
+            return {
+                owner: String(config.owner || '').trim(),
+                repo: String(config.repo || '').trim(),
+                branch: String(config.branch || 'main').trim(),
+                roomsPath: String(config.roomsPath || 'data/rooms.txt').trim(),
+                apiBase: String(config.apiBase || ROOMS_API_FALLBACK).replace(/\/$/, ''),
+            };
+        }
+
+        function githubConfigured() {
+            const c = githubConfig();
+            return Boolean(c.owner && c.repo && c.branch && c.roomsPath && ROOMS_DATA.githubToken);
+        }
+
+        function roomsApiUrl() {
+            const c = githubConfig();
+            const path = c.roomsPath.split('/').map(encodeURIComponent).join('/');
+            return `${c.apiBase}/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${path}?ref=${encodeURIComponent(c.branch)}`;
+        }
+
+        function utf8ToBase64(text) {
+            const bytes = new TextEncoder().encode(String(text));
+            let binary = '';
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+            }
+            return btoa(binary);
+        }
+
+        function base64ToUtf8(base64) {
+            const normalized = String(base64 || '').replace(/\n/g, '');
+            const binary = atob(normalized);
+            const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+            return new TextDecoder('utf-8').decode(bytes);
+        }
+
+        function githubHeaders() {
+            return {
+                'Accept': 'application/vnd.github+json',
+                'Authorization': `Bearer ${ROOMS_DATA.githubToken}`,
+                'X-GitHub-Api-Version': '2026-03-10',
+                'Content-Type': 'application/json'
+            };
+        }
+
+        async function fetchGithubRoomsFile() {
+            if (!githubConfigured()) {
+                // 公開查閱不需要 Token：fallback 到 GitHub Pages 靜態檔案。
+                return { text: await fetchText(ROOMS_URL), sha: null, viaApi: false };
+            }
+
+            const response = await fetch(roomsApiUrl(), {
+                method: 'GET',
+                headers: githubHeaders(),
+                cache: 'no-store'
+            });
+
+            if (!response.ok) {
+                throw new Error(`GitHub 讀取失敗 HTTP ${response.status}`);
+            }
+
+            const payload = await response.json();
+            if (!payload?.content || !payload?.sha) {
+                throw new Error('GitHub API 回傳缺少 rooms.txt content / sha。');
+            }
+
+            return {
+                text: base64ToUtf8(payload.content),
+                sha: payload.sha,
+                viaApi: true
+            };
         }
 
         function renderMeta() {
-            const t = TOUR_DATA.trip;
-            document.getElementById('group-badge').textContent = '團號：' + (t.groupNo || '-');
-            document.getElementById('airline-badge').innerHTML = '<i class="fa-solid fa-plane"></i> ' + escapeHtml(t.airline || '-');
-            document.getElementById('trip-title').textContent = t.title || '旅遊行程手冊';
-            document.getElementById('trip-subtitle').textContent = `${t.dateText || ''}${t.leader ? ' | 領隊：' + t.leader : ''}`;
-            document.getElementById('weather-title').textContent = `${t.weather?.locationName || '當地'}即時天氣預報`;
+            const trip = TOUR_DATA.trip || {};
+            document.getElementById('group-badge').textContent = '團號：' + (trip.groupNo || '-');
+            document.getElementById('airline-badge').innerHTML = '<i class="fa-solid fa-plane"></i> ' + escapeHtml(trip.airline || '-');
+            document.getElementById('trip-title').textContent = trip.title || '旅遊行程手冊';
+            document.getElementById('trip-subtitle').textContent = `${trip.dateText || ''}${trip.leader ? ' | 領隊：' + trip.leader : ''}`;
+            document.getElementById('weather-title').textContent = `${trip.weather?.locationName || '當地'}即時天氣預報`;
         }
 
         function renderRooms() {
             const container = document.getElementById('room-list-container');
             const members = normalizeMembers();
+
             if (!members.length) {
                 container.innerHTML = '<p class="text-xs text-slate-400 text-center py-3">目前沒有團員資料。</p>';
                 return;
             }
 
-            const isEditing = document.body.dataset.guideEdit === '1';
             let html = '';
+
             members.forEach(member => {
-                const input = isEditing
-                    ? `<input type="text" inputmode="numeric" autocomplete="off" id="room_edit_${member.id}" value="${escapeHtml(member.room)}" class="flex-1 p-1.5 border border-sky-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm font-bold text-slate-700 bg-white" placeholder="房號">`
-                    : `<span class="flex-1 p-1.5 border border-slate-200 bg-slate-50 rounded-md text-sm font-bold text-slate-700 min-h-[34px] flex items-center">${member.room ? escapeHtml(member.room) : '<span class="text-slate-300 font-normal">尚未填寫</span>'}</span>`;
-                html += `
-                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
-                        <span class="w-28 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2 truncate">${escapeHtml(member.name)}</span>
-                        ${input}
-                    </div>`;
+                if (guideEditMode) {
+                    html += `
+                        <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
+                            <span class="w-28 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2 truncate">${escapeHtml(member.name)}</span>
+                            <input type="text"
+                                   inputmode="numeric"
+                                   autocomplete="off"
+                                   id="room_edit_${member.id}"
+                                   value="${escapeHtml(member.room)}"
+                                   class="flex-1 p-1.5 border border-sky-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm font-bold text-slate-700 bg-white"
+                                   placeholder="房號">
+                        </div>`;
+                } else {
+                    html += `
+                        <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
+                            <span class="w-28 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2 truncate">${escapeHtml(member.name)}</span>
+                            <span class="flex-1 p-1.5 border border-slate-200 bg-slate-50 rounded-md text-sm font-bold text-slate-700 min-h-[34px] flex items-center">
+                                ${member.room ? escapeHtml(member.room) : '<span class="text-slate-300 font-normal">尚未填寫</span>'}
+                            </span>
+                        </div>`;
+                }
             });
 
-            html += `
-                <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
-                    <div class="flex items-center gap-1"><span class="sync-dot ok"></span>房號資料：GitHub 共用檔案</div>
-                    <div class="mt-1">最後同步：${new Date().toLocaleTimeString('zh-TW', { hour12: false })}</div>
-                    <div class="mt-2 flex gap-2">
-                        ${isEditing
-                            ? `<button onclick="cancelGuideEdit()" class="flex-1 bg-slate-50 border border-slate-200 text-slate-600 py-1.5 rounded-lg font-bold hover:bg-slate-100">取消編輯</button>
-                               <button onclick="prepareGithubCommit()" class="flex-1 bg-sky-600 text-white border border-sky-600 py-1.5 rounded-lg font-bold hover:bg-sky-700"><i class="fa-brands fa-github mr-1"></i>完成並更新 GitHub</button>`
-                            : `<button onclick="refreshRoomsNow()" class="flex-1 bg-slate-50 border border-slate-200 text-slate-600 py-1.5 rounded-lg font-bold hover:bg-slate-100"><i class="fa-solid fa-rotate mr-1"></i>重新讀取</button>
-                               <button onclick="openGuideEdit()" class="flex-1 bg-sky-50 border border-sky-200 text-sky-700 py-1.5 rounded-lg font-bold hover:bg-sky-100"><i class="fa-solid fa-pen-to-square mr-1"></i>導遊修改全部房號</button>`}
-                    </div>
-                    <div class="mt-2">一般團員：只能查閱。只有具有 GitHub Repository 寫入權限的導遊帳號可以將修改提交至 GitHub。</div>
-                </div>`;
+            const lastSync = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+
+            if (guideEditMode) {
+                html += `
+                    <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] leading-relaxed">
+                        <div class="flex items-center gap-1 text-emerald-600 font-bold"><span class="sync-dot ok"></span>導遊編輯模式：可一次修改全部 ${members.length} 位團員</div>
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <button onclick="saveRoomsToGithub()" ${roomSaveBusy ? 'disabled' : ''} class="bg-emerald-500 text-white py-2 rounded-lg font-bold hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                <i class="fa-solid fa-cloud-arrow-up mr-1"></i>${roomSaveBusy ? '儲存中...' : '儲存全部房號'}
+                            </button>
+                            <button onclick="cancelGuideEdit()" ${roomSaveBusy ? 'disabled' : ''} class="bg-slate-100 text-slate-600 border border-slate-200 py-2 rounded-lg font-bold hover:bg-slate-200 disabled:opacity-50 transition-colors">
+                                取消修改
+                            </button>
+                        </div>
+                    </div>`;
+            } else {
+                html += `
+                    <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] leading-relaxed">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-slate-400">最後同步 ${lastSync}</span>
+                            <div class="flex gap-2">
+                                <button onclick="refreshRoomsNow()" class="text-sky-600 font-bold hover:text-sky-800"><i class="fa-solid fa-rotate-right mr-1"></i>重新讀取</button>
+                                <button onclick="openGuideEdit()" class="text-slate-600 font-bold hover:text-slate-800"><i class="fa-solid fa-key mr-1"></i>導遊密碼</button>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+
             container.innerHTML = html;
         }
 
         function renderItinerary() {
             const container = document.getElementById('itinerary-container');
             const days = Array.isArray(TOUR_DATA.itinerary) ? TOUR_DATA.itinerary : [];
-            container.innerHTML = days.map(day => {
+            let html = '';
+
+            days.forEach(day => {
                 const events = Array.isArray(day.events) ? day.events : [];
-                const eventsHtml = events.map(event => {
-                    const tag = event.tag ? `<span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs mr-1">${escapeHtml(event.tag)}</span>` : '';
-                    const titleHtml = event.mapQuery
-                        ? `<a href="${mapsUrl(event.mapQuery)}" target="_blank" rel="noopener" class="font-bold text-sky-600 hover:text-sky-800 transition-colors block"><i class="fa-solid fa-location-dot mr-1"></i>${escapeHtml(event.title)}</a>`
-                        : `<p class="font-bold text-slate-800">${tag}${escapeHtml(event.title)}</p>`;
-                    const titleWithTag = event.mapQuery && event.tag ? `<div class="font-bold text-slate-800 mt-1">${tag}</div>${titleHtml}` : titleHtml;
-                    const detail = event.detail ? `<p class="font-bold text-slate-800 mt-1">${escapeHtml(event.detail)}</p>` : '';
-                    const description = event.description ? `<p class="text-xs text-slate-500 mt-1 leading-relaxed">${escapeHtml(event.description)}</p>` : '';
-                    const warning = event.warning ? `<p class="text-xs text-red-600 font-bold mt-1">※ 提醒：${escapeHtml(event.warning)}</p>` : '';
-                    return `<div class="timeline-border ${event.last ? 'border-transparent' : ''}">
-                        <p class="text-xs text-slate-400 font-medium mb-0.5">${escapeHtml(event.time)}</p>
-                        ${titleWithTag}${detail}${warning}${description}
-                    </div>`;
-                }).join('');
-
-                const h = day.hotel;
-                let hotelHtml = '';
-                if (h) {
-                    if (h.note) {
-                        hotelHtml = `<div class="mt-2 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center justify-between"><div><p class="text-xs text-slate-400 font-bold mb-1"><i class="fa-solid fa-hotel mr-1"></i>今夜住宿</p><p class="font-bold text-slate-800 text-sm">${escapeHtml(h.name)} <span class="text-xs font-normal text-slate-500 ml-1">(${escapeHtml(h.note)})</span></p></div></div>`;
-                    } else if (h.name) {
-                        hotelHtml = `<div class="mt-2 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl border border-slate-100"><p class="text-xs text-slate-400 font-bold mb-1.5"><i class="fa-solid fa-hotel mr-1"></i>今夜住宿</p><div class="flex justify-between items-start mb-2"><a href="${mapsUrl(h.mapQuery || h.name)}" target="_blank" rel="noopener" class="font-bold text-slate-800 hover:text-sky-600 text-sm leading-tight transition-colors">${escapeHtml(h.name)}</a>${h.address ? `<button onclick='copyText(${JSON.stringify(h.address)})' class="text-xs bg-white border border-slate-200 px-2 py-1 rounded text-slate-600 hover:bg-slate-100 ml-2 shrink-0 shadow-sm transition-colors"><i class="fa-regular fa-copy"></i> 地址</button>` : ''}</div>${h.address ? `<div class="grid grid-cols-2 gap-2 text-xs"><a href="${mapsUrl(h.supermarketQuery || ('supermarket near ' + h.name))}" target="_blank" rel="noopener" class="bg-emerald-50 text-emerald-700 border border-emerald-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-emerald-100 transition-colors"><i class="fa-solid fa-cart-shopping mr-1"></i>周邊超市</a><a href="${mapsUrl(h.laundromatQuery || ('laundromat near ' + h.name))}" target="_blank" rel="noopener" class="bg-indigo-50 text-indigo-700 border border-indigo-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-indigo-100 transition-colors"><i class="fa-solid fa-jug-detergent mr-1"></i>自助洗衣</a></div>` : ''}</div>`;
-                    }
-                }
-
-                return `<section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
+                html += `
+                <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
                     <div class="flex justify-between items-end border-b pb-2 border-slate-100">
                         <span class="text-xl font-black text-sky-600 tracking-tight">DAY ${escapeHtml(day.day)} <span class="text-sm text-slate-400 font-medium ml-1">${escapeHtml(day.dateText || '')}</span></span>
                         <span class="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded font-medium">降雨 <span id="rain-d${escapeHtml(day.day)}" class="font-bold text-slate-700">--</span>% | <span id="temp-d${escapeHtml(day.day)}" class="font-bold text-slate-700">--</span>°C</span>
                     </div>
-                    <div class="space-y-4 text-sm mt-3">${eventsHtml}</div>
-                    ${hotelHtml}
-                </section>`;
-            }).join('');
+                    <div class="space-y-4 text-sm mt-3">`;
+
+                events.forEach(event => {
+                    const borderClass = event.last ? 'border-transparent' : '';
+                    const titleHtml = event.mapQuery
+                        ? `<a href="${mapsUrl(event.mapQuery)}" target="_blank" rel="noopener" class="font-bold text-sky-600 hover:text-sky-800 transition-colors block"><i class="fa-solid fa-location-dot mr-1"></i>${escapeHtml(event.title)}</a>`
+                        : `<p class="font-bold text-slate-800">${escapeHtml(event.title || '')}</p>`;
+                    html += `
+                        <div class="timeline-border ${borderClass}">
+                            <p class="text-xs text-slate-400 font-medium mb-0.5">${escapeHtml(event.time || '')}</p>
+                            ${event.tag ? `<p class="font-bold text-slate-800 mt-1"><span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs mr-1">${escapeHtml(event.tag)}</span>${event.mapQuery ? '' : escapeHtml(event.title || '')}</p>` : titleHtml}
+                            ${event.tag && event.mapQuery ? `<p class="font-bold text-slate-800 mt-1"><span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs mr-1">${escapeHtml(event.tag)}</span>${escapeHtml(event.detail || '')}</p>` : ''}
+                            ${!event.tag && event.detail ? `<p class="font-bold text-slate-800 mt-1">${escapeHtml(event.detail)}</p>` : ''}
+                            ${event.description ? `<p class="text-xs text-slate-500 mt-1 leading-relaxed">${escapeHtml(event.description)}</p>` : ''}
+                            ${event.warning ? `<p class="text-xs text-red-600 font-bold mt-1">※ 提醒：${escapeHtml(event.warning)}</p>` : ''}
+                        </div>`;
+                });
+
+                if (day.hotel) {
+                    html += `<div class="mt-2 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl border border-slate-100">`;
+                    html += `<p class="text-xs text-slate-400 font-bold mb-1.5"><i class="fa-solid fa-hotel mr-1"></i>今夜住宿</p>`;
+                    html += `<div class="flex justify-between items-start mb-2">`;
+                    if (day.hotel.mapQuery) {
+                        html += `<a href="${mapsUrl(day.hotel.mapQuery)}" target="_blank" rel="noopener" class="font-bold text-slate-800 hover:text-sky-600 text-sm leading-tight transition-colors">${escapeHtml(day.hotel.name || '')}</a>`;
+                    } else {
+                        html += `<p class="font-bold text-slate-800 text-sm leading-tight">${escapeHtml(day.hotel.name || '')}</p>`;
+                    }
+                    if (day.hotel.address) {
+                        html += `<button onclick="copyText('${escapeHtml(day.hotel.address).replace(/'/g, "\\'")}')" class="text-xs bg-white border border-slate-200 px-2 py-1 rounded text-slate-600 hover:bg-slate-100 ml-2 shrink-0 shadow-sm transition-colors"><i class="fa-regular fa-copy"></i> 地址</button>`;
+                    }
+                    html += `</div>`;
+                    if (day.hotel.address) html += `<p class="text-xs text-slate-500 mb-2">${escapeHtml(day.hotel.address)}</p>`;
+                    if (day.hotel.supermarketQuery || day.hotel.laundromatQuery) {
+                        html += `<div class="grid grid-cols-2 gap-2 text-xs">`;
+                        if (day.hotel.supermarketQuery) html += `<a href="${mapsUrl(day.hotel.supermarketQuery)}" target="_blank" rel="noopener" class="bg-emerald-50 text-emerald-700 border border-emerald-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-emerald-100 transition-colors"><i class="fa-solid fa-cart-shopping mr-1"></i>周邊超市</a>`;
+                        if (day.hotel.laundromatQuery) html += `<a href="${mapsUrl(day.hotel.laundromatQuery)}" target="_blank" rel="noopener" class="bg-indigo-50 text-indigo-700 border border-indigo-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-indigo-100 transition-colors"><i class="fa-solid fa-jug-detergent mr-1"></i>自助洗衣</a>`;
+                        html += `</div>`;
+                    }
+                    html += `</div>`;
+                }
+
+                html += `</section>`;
+            });
+
+            container.innerHTML = html;
         }
 
         function renderChecklist() {
             const container = document.getElementById('checklist-container');
             const items = Array.isArray(TOUR_DATA.checklist) ? TOUR_DATA.checklist : [];
-            const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY_CHECKLIST) || '{}');
-            let html = '';
+            const keyPrefix = STORAGE_KEY_CHECKLIST_PREFIX + String(TOUR_DATA.trip?.groupNo || 'default') + '_';
+            let savedState = {};
+            try { savedState = JSON.parse(localStorage.getItem(keyPrefix) || '{}') || {}; } catch { savedState = {}; }
 
+            let html = '';
             items.forEach((group, gIndex) => {
                 html += `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4"><h4 class="font-black text-slate-800 border-b border-slate-100 pb-2 mb-3 text-sm"><i class="fa-solid fa-thumbtack text-sky-500 mr-2"></i>${escapeHtml(group.category)}</h4><div class="space-y-3">`;
                 (group.items || []).forEach((item, iIndex) => {
                     const key = `chk_${gIndex}_${iIndex}`;
                     const checked = Boolean(savedState[key]);
-                    const isChecked = checked ? 'checked' : '';
-                    const textStyle = checked ? 'line-through text-slate-400' : 'text-slate-700 font-medium';
-                    html += `<label class="flex items-start gap-3 text-sm cursor-pointer group"><input type="checkbox" id="${key}" ${isChecked} onchange="saveChecklist('${key}')" class="mt-0.5 w-5 h-5 text-sky-600 rounded border-slate-300 focus:ring-sky-500 transition-colors cursor-pointer"><span id="label_${key}" class="${textStyle} transition-all duration-200 select-none group-hover:text-sky-700">${escapeHtml(item)}</span></label>`;
+                    const style = checked ? 'line-through text-slate-400' : 'text-slate-700 font-medium';
+                    html += `<label class="flex items-start gap-3 text-sm cursor-pointer group"><input type="checkbox" id="${key}" ${checked ? 'checked' : ''} onchange="saveChecklist('${key}', '${keyPrefix}')" class="mt-0.5 w-5 h-5 text-sky-600 rounded border-slate-300 focus:ring-sky-500 transition-colors cursor-pointer"><span id="label_${key}" class="${style} transition-all duration-200 select-none group-hover:text-sky-700">${escapeHtml(item)}</span></label>`;
                 });
                 html += `</div></div>`;
             });
             container.innerHTML = html;
         }
 
-        function renderFlight() {
-            const t = TOUR_DATA.trip;
-            const c = TOUR_DATA.contact || {};
-            document.getElementById('contact-group').textContent = t.groupNo || '-';
-            document.getElementById('contact-leader').textContent = c.leader || t.leader || '-';
-            const phone = document.getElementById('contact-phone');
-            phone.textContent = c.emergencyPhone || '-';
-            phone.href = c.emergencyPhone ? `tel:${String(c.emergencyPhone).replace(/\D/g, '')}` : '#';
-            document.getElementById('contact-agency').textContent = `${c.agency || '-'}${c.agencyPhone ? ' (' + c.agencyPhone + ')' : ''}`;
+        function saveChecklist(key, keyPrefix) {
+            let savedState = {};
+            try { savedState = JSON.parse(localStorage.getItem(keyPrefix) || '{}') || {}; } catch { savedState = {}; }
+            const checkbox = document.getElementById(key);
+            const label = document.getElementById(`label_${key}`);
+            const checked = Boolean(checkbox?.checked);
+            savedState[key] = checked;
+            localStorage.setItem(keyPrefix, JSON.stringify(savedState));
+            if (label) {
+                label.classList.toggle('line-through', checked);
+                label.classList.toggle('text-slate-400', checked);
+                label.classList.toggle('text-slate-700', !checked);
+                label.classList.toggle('font-medium', !checked);
+                label.classList.toggle('group-hover:text-sky-700', !checked);
+            }
+        }
 
+        function renderFlight() {
+            const contact = TOUR_DATA.contact || {};
             const flights = Array.isArray(TOUR_DATA.flights) ? TOUR_DATA.flights : [];
-            document.getElementById('contact-container').innerHTML = `<h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-users text-sky-500 mr-2"></i>聯絡資訊</h3><ul class="text-sm space-y-3 mt-3"><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">團號</span><span class="font-bold">${escapeHtml(t.groupNo || '-')}</span></li><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">領隊</span><span class="font-bold">${escapeHtml(c.leader || t.leader || '-')}</span></li><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">緊急電話</span><a href="${phone.href}" class="text-sky-600 font-black">${escapeHtml(c.emergencyPhone || '-')}</a></li><li class="flex justify-between"><span class="text-slate-500">旅行社</span><span class="font-bold">${escapeHtml(c.agency || '-')} ${c.agencyPhone ? '(' + escapeHtml(c.agencyPhone) + ')' : ''}</span></li></ul>`;
-            document.getElementById('flight-container').innerHTML = `<h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-plane-up text-sky-500 mr-2"></i>航班明細</h3><div id="flight-list" class="space-y-4 mt-4 text-sm">${flights.map((f, index) => `<div class="relative pl-4 ${index === flights.length - 1 ? 'border-transparent' : 'border-l-2 border-slate-200'}"><div class="absolute w-3 h-3 ${index === 0 ? 'bg-sky-500' : 'bg-slate-400'} rounded-full -left-[7px] top-1 border-2 border-white"></div><p class="font-bold text-slate-800 text-base">${escapeHtml(f.type || '')} ${escapeHtml(f.flight || '')}</p><p class="text-xs text-slate-500 mt-1">${escapeHtml(f.dateText || '')}${f.meeting ? ' ' + escapeHtml(f.meeting) : ''}</p><p class="text-sm font-black ${index === 0 ? 'text-sky-700' : 'text-slate-700'} mt-1">起飛 ${escapeHtml(f.departure || '--')} ➔ 抵達 ${escapeHtml(f.arrival || '--')}</p></div>`).join('')}</div>`;
+            document.getElementById('contact-container').innerHTML = `
+                <h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-users text-sky-500 mr-2"></i>聯絡資訊</h3>
+                <ul class="text-sm space-y-3 mt-3">
+                    <li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">團號</span><span class="font-bold">${escapeHtml(TOUR_DATA.trip?.groupNo || '')}</span></li>
+                    <li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">領隊</span><span class="font-bold">${escapeHtml(contact.leader || TOUR_DATA.trip?.leader || '')}</span></li>
+                    <li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">緊急電話</span><a href="tel:${escapeHtml(String(contact.emergencyPhone || '').replace(/[-\s]/g, ''))}" class="text-sky-600 font-black">${escapeHtml(contact.emergencyPhone || '')}</a></li>
+                    <li class="flex justify-between"><span class="text-slate-500">旅行社</span><span class="font-bold">${escapeHtml(contact.agency || '')}${contact.agencyPhone ? ` (${escapeHtml(contact.agencyPhone)})` : ''}</span></li>
+                </ul>`;
+
+            let html = `<h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-plane-up text-sky-500 mr-2"></i>航班明細</h3><div class="space-y-4 mt-4 text-sm">`;
+            flights.forEach((flight, index) => {
+                html += `<div class="relative pl-4 border-l-2 ${index === flights.length - 1 ? 'border-transparent' : 'border-slate-200'}"><div class="absolute w-3 h-3 ${index === 0 ? 'bg-sky-500' : 'bg-slate-400'} rounded-full -left-[7px] top-1 border-2 border-white"></div><p class="font-bold text-slate-800 text-base">${escapeHtml(flight.type || '')} ${escapeHtml(flight.flight || '')}</p><p class="text-xs text-slate-500 mt-1">${escapeHtml(flight.dateText || '')}${flight.meeting ? ' | ' + escapeHtml(flight.meeting) : ''}</p><p class="text-sm font-black ${index === 0 ? 'text-sky-700' : 'text-slate-700'} mt-1">${escapeHtml(flight.departure || '')} ➔ ${escapeHtml(flight.arrival || '')}</p></div>`;
+            });
+            html += `</div>`;
+            document.getElementById('flight-container').innerHTML = html;
         }
 
         function renderTools() {
             const tools = TOUR_DATA.tools || {};
-            const vjw = document.getElementById('tool-vjw');
-            vjw.innerHTML = `<div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200"><h3 class="font-bold border-b border-slate-100 pb-2 text-slate-800 mb-3"><i class="fa-solid fa-link text-sky-500 mr-2"></i>線上入境申報</h3><a href="${escapeHtml(tools.vjwUrl || '#')}" target="_blank" rel="noopener" class="bg-blue-600 text-white text-center py-2.5 px-4 rounded-xl font-bold shadow-md flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"><i class="fa-solid fa-passport"></i> Visit Japan Web (點此進入)</a><p class="text-xs text-slate-400 text-center mt-2">${escapeHtml(tools.vjwNote || '')}</p></div>`;
+            document.getElementById('tool-vjw').innerHTML = `
+                <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+                    <h3 class="font-bold border-b border-slate-100 pb-2 text-slate-800 mb-3"><i class="fa-solid fa-link text-sky-500 mr-2"></i>線上入境申報</h3>
+                    <a href="${escapeHtml(tools.vjwUrl || '#')}" target="_blank" rel="noopener" class="bg-blue-600 text-white text-center py-2.5 px-4 rounded-xl font-bold shadow-md flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"><i class="fa-solid fa-passport"></i> Visit Japan Web (點此進入)</a>
+                    <p class="text-xs text-slate-400 text-center mt-2">${escapeHtml(tools.vjwNote || '')}</p>
+                </div>`;
 
-            const rate = Number(TOUR_DATA?.trip?.exchangeRate || 0);
-            document.getElementById('tool-currency').innerHTML = `<div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200"><h3 class="font-bold border-b border-slate-100 pb-2 text-slate-800 mb-3"><i class="fa-solid fa-calculator text-sky-500 mr-2"></i>日幣概算 (匯率 ${rate})</h3><div class="flex items-center gap-2 text-sm bg-slate-50 p-3 rounded-xl border border-slate-100"><input type="number" id="jpy-input" placeholder="輸入日幣 ¥" oninput="convertCurrency()" class="w-1/2 p-2.5 border rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 font-bold bg-white"><span class="text-lg font-black text-slate-400 mx-1">➔</span><span id="twd-output" class="text-lg font-black text-emerald-600 flex-1 text-right">0 NTD</span></div></div>`;
+            const rate = Number(TOUR_DATA.trip?.exchangeRate || 0);
+            document.getElementById('tool-currency').innerHTML = `
+                <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+                    <h3 class="font-bold border-b border-slate-100 pb-2 text-slate-800 mb-3"><i class="fa-solid fa-calculator text-sky-500 mr-2"></i>日幣概算 (匯率 ${rate || 0})</h3>
+                    <div class="flex items-center gap-2 text-sm bg-slate-50 p-3 rounded-xl border border-slate-100"><input type="number" id="jpy-input" placeholder="輸入日幣 ¥" oninput="convertCurrency()" class="w-1/2 p-2.5 border rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 font-bold bg-white"><span class="text-lg font-black text-slate-400 mx-1">➔</span><span id="twd-output" class="text-lg font-black text-emerald-600 flex-1 text-right">0 NTD</span></div>
+                </div>`;
 
-            const manners = (tools.manners || []).map(item => `<li><i class="fa-solid fa-check text-blue-500 mr-1"></i><b>${escapeHtml(item[0] || '')}</b>${escapeHtml(item[1] || '')}</li>`).join('');
-            document.getElementById('tool-manners').innerHTML = `<div class="bg-blue-50 rounded-2xl p-4 shadow-sm border border-blue-200"><h3 class="font-bold border-b border-blue-200 pb-2 text-blue-900 mb-2"><i class="fa-solid fa-utensils mr-2"></i>日本飲食與風俗禮儀</h3><ul class="text-xs space-y-2 text-blue-800 leading-relaxed">${manners}</ul></div>`;
+            const manners = tools.manners || [];
+            document.getElementById('tool-manners').innerHTML = `<div class="bg-blue-50 rounded-2xl p-4 shadow-sm border border-blue-200"><h3 class="font-bold border-b border-blue-200 pb-2 text-blue-900 mb-2"><i class="fa-solid fa-utensils mr-2"></i>日本飲食與風俗禮儀</h3><ul class="text-xs space-y-2 text-blue-800 leading-relaxed">${manners.map(item => `<li><i class="fa-solid fa-check text-blue-500 mr-1"></i><b>${escapeHtml(item[0])}</b>${escapeHtml(item[1])}</li>`).join('')}</ul></div>`;
 
-            const local = (tools.local || []).map(item => `<li><i class="fa-solid fa-circle-info text-amber-600 mr-1"></i><b>${escapeHtml(item[0] || '')}</b>${escapeHtml(item[1] || '')}</li>`).join('');
-            document.getElementById('tool-local').innerHTML = `<div class="bg-amber-50 rounded-2xl p-4 shadow-sm border border-amber-200"><h3 class="font-bold border-b border-amber-200 pb-2 text-amber-900 mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i>當地生活與法規注意</h3><ul class="text-xs space-y-2 text-amber-800 leading-relaxed">${local}</ul></div>`;
+            const local = tools.local || [];
+            document.getElementById('tool-local').innerHTML = `<div class="bg-amber-50 rounded-2xl p-4 shadow-sm border border-amber-200"><h3 class="font-bold border-b border-amber-200 pb-2 text-amber-900 mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i>當地生活與法規注意</h3><ul class="text-xs space-y-2 text-amber-800 leading-relaxed">${local.map(item => `<li><i class="fa-solid fa-check text-amber-600 mr-1"></i><b>${escapeHtml(item[0])}</b>${escapeHtml(item[1])}</li>`).join('')}</ul></div>`;
 
-            const emergency = (tools.emergency || []).map((text) => `<li>${escapeHtml(text)}</li>`).join('');
-            document.getElementById('tool-emergency').innerHTML = `<div class="bg-red-50 rounded-2xl p-4 shadow-sm border border-red-200"><h3 class="font-bold border-b border-red-200 pb-2 text-red-900 mb-2"><i class="fa-solid fa-truck-medical mr-2"></i>緊急求助聯絡</h3><ul class="text-xs space-y-2 text-red-800">${emergency}</ul></div>`;
+            const emergency = tools.emergency || [];
+            document.getElementById('tool-emergency').innerHTML = `<div class="bg-red-50 rounded-2xl p-4 shadow-sm border border-red-200"><h3 class="font-bold border-b border-red-200 pb-2 text-red-900 mb-2"><i class="fa-solid fa-truck-medical mr-2"></i>緊急求助聯絡</h3><ul class="text-xs space-y-2 text-red-800">${emergency.map(text => `<li>${escapeHtml(text)}</li>`).join('')}</ul></div>`;
         }
 
-        function saveChecklist(key) {
-            const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY_CHECKLIST) || '{}');
-            const checkbox = document.getElementById(key);
-            if (!checkbox) return;
-            savedState[key] = checkbox.checked;
-            localStorage.setItem(STORAGE_KEY_CHECKLIST, JSON.stringify(savedState));
-
-            const label = document.getElementById(`label_${key}`);
-            if (!label) return;
-            if (checkbox.checked) {
-                label.classList.add('line-through', 'text-slate-400');
-                label.classList.remove('text-slate-700', 'font-medium', 'group-hover:text-sky-700');
-            } else {
-                label.classList.remove('line-through', 'text-slate-400');
-                label.classList.add('text-slate-700', 'font-medium', 'group-hover:text-sky-700');
-            }
+        function switchTab(tabName) {
+            const tabs = ['itinerary', 'checklist', 'flight', 'tools'];
+            tabs.forEach(tab => {
+                const content = document.getElementById('tab-' + tab);
+                const btn = document.getElementById('btn-' + tab);
+                if (tab === tabName) {
+                    content.classList.remove('hidden');
+                    btn.classList.add('tab-active');
+                    btn.classList.remove('text-slate-500');
+                } else {
+                    content.classList.add('hidden');
+                    btn.classList.remove('tab-active');
+                    btn.classList.add('text-slate-500');
+                }
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function toggleRoomList() {
             const container = document.getElementById('room-list-container');
             const icon = document.getElementById('room-toggle-icon');
-            if (container.classList.contains('hidden')) {
-                container.classList.remove('hidden');
-                icon.style.transform = 'rotate(180deg)';
-            } else {
-                container.classList.add('hidden');
-                icon.style.transform = 'rotate(0deg)';
-            }
-        }
-
-        function copyText(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                alert('已成功複製地址：\n' + text);
-            }).catch(() => {
-                alert('複製失敗，請手動選取複製。');
-            });
-        }
-
-        function convertCurrency() {
-            const jpy = Number(document.getElementById('jpy-input').value || 0);
-            const rate = Number(TOUR_DATA?.trip?.exchangeRate || 0);
-            document.getElementById('twd-output').innerText = Math.round(jpy * rate).toLocaleString() + ' NTD';
-        }
-
-        async function fetchWeather() {
-            if (!TOUR_DATA?.trip?.weather) return;
-            const infoLabel = document.getElementById('weather-info');
-            infoLabel.innerText = '資料同步中...';
-            const w = TOUR_DATA.trip.weather;
-            try {
-                const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(w.latitude)}&longitude=${encodeURIComponent(w.longitude)}&daily=temperature_2m_max,precipitation_probability_max&timezone=${encodeURIComponent(w.timezone)}`;
-                const res = await fetch(url);
-                if (!res.ok) throw new Error('weather http ' + res.status);
-                const data = await res.json();
-                const temps = data?.daily?.temperature_2m_max || [];
-                const rains = data?.daily?.precipitation_probability_max || [];
-                infoLabel.innerText = temps.length ? `預測最高溫 ${temps[0]}°C，降雨機率 ${rains[0] ?? '--'}%` : '無可用天氣資料';
-                (TOUR_DATA.itinerary || []).forEach(day => {
-                    const idx = Number(day.day) - 1;
-                    const temp = document.getElementById(`temp-d${day.day}`);
-                    const rain = document.getElementById(`rain-d${day.day}`);
-                    if (temp && temps[idx] !== undefined) temp.innerText = temps[idx];
-                    if (rain && rains[idx] !== undefined) rain.innerText = rains[idx];
-                });
-            } catch (e) {
-                infoLabel.innerText = '無法取得即時資料';
-            }
+            const opening = container.classList.contains('hidden');
+            container.classList.toggle('hidden', !opening);
+            icon.style.transform = opening ? 'rotate(180deg)' : 'rotate(0deg)';
         }
 
         async function refreshRoomsNow() {
-            if (document.body.dataset.guideEdit === '1') return;
+            if (guideEditMode || roomSaveBusy) return;
             const container = document.getElementById('room-list-container');
-            const old = container.innerHTML;
             try {
-                const result = await fetchFirstAvailable(ROOMS_URL_CANDIDATES);
-                roomsSourceText = result.text;
-                ROOMS_DATA = parseRooms(roomsSourceText);
-                if (!ROOMS_DATA.members.length) {
-                    throw new Error(`找到 ${result.path}，但沒有解析到任何團員房號資料。`);
-                }
-                if (document.body.dataset.guideEdit === '1') { delete document.body.dataset.guideEdit; }
+                const result = await fetchGithubRoomsFile();
+                const parsed = parseRooms(result.text);
+                if (!parsed.members.length) throw new Error('rooms.txt 沒有有效的團員資料。');
+                ROOMS_DATA = parsed;
                 renderRooms();
-            } catch (e) {
-                const message = String(e?.message || e);
-                container.innerHTML = `
-                    <div class="text-xs text-red-500 leading-relaxed py-3">
-                        <p class="font-bold">共享資料載入失敗</p>
-                        <p class="mt-1 whitespace-pre-line">${escapeHtml(message)}</p>
-                        <button onclick="refreshRoomsNow()" class="mt-3 w-full bg-slate-50 border border-slate-200 text-slate-600 py-2 rounded-lg font-bold hover:bg-slate-100">重新讀取</button>
-                    </div>`;
-                console.error('rooms.txt 載入失敗：', e);
-                if (!old.includes('共享資料載入失敗')) console.error('原房號畫面已保留於記憶中，但資料無法刷新。');
+            } catch (error) {
+                container.innerHTML = `<div class="text-xs text-red-500 leading-relaxed py-3"><p class="font-bold">共享房號資料載入失敗</p><p class="mt-1">${escapeHtml(error.message || error)}</p><button onclick="refreshRoomsNow()" class="mt-3 w-full bg-slate-50 border border-slate-200 text-slate-600 py-2 rounded-lg font-bold hover:bg-slate-100">重新讀取</button></div>`;
+                console.error(error);
             }
-        }
-
-        function deriveGithubEditUrl() {
-            const explicit = TOUR_DATA?.repository?.roomsEditUrl;
-            if (explicit) return explicit;
-
-            // GitHub Pages 標準網址：https://OWNER.github.io/REPO/
-            const host = location.hostname;
-            const pathParts = location.pathname.split('/').filter(Boolean);
-            const match = host.match(/^(.+)\.github\.io$/i);
-            if (!match) return '';
-
-            const owner = match[1];
-            const repo = pathParts[0] || `${owner}.github.io`;
-            return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/edit/main/data/rooms.txt`;
-        }
-
-        function collectEditedRooms() {
-            const members = normalizeMembers();
-            return members.map(member => {
-                const input = document.getElementById(`room_edit_${member.id}`);
-                const room = input ? input.value.trim() : member.room;
-                return { ...member, room };
-            });
-        }
-
-        function buildRoomsText(members) {
-            const groupNo = TOUR_DATA?.trip?.groupNo || '';
-            const guidePassword = ROOMS_DATA.guidePassword || '';
-            const lines = [
-                `# ${TOUR_DATA?.trip?.title || '旅遊團'} ${groupNo} 團員房號共同資料`,
-                '# ============================================================',
-                `# GUIDE_PASSWORD=${guidePassword}`,
-                '#',
-                '# 格式：ID|團員姓名|房號',
-                '# 空白房號請保留最後的 |。',
-                '# 本檔案為 GitHub Pages 唯一共同房號資料來源。',
-                '# 一般團員只能查閱；導遊完成驗證後可批次整理全部房號。',
-                '# ============================================================',
-            ];
-            members.forEach(member => {
-                lines.push(`${member.id}|${member.name}|${member.room}`);
-            });
-            return lines.join('\n') + '\n';
-        }
-
-        async function copyToClipboard(text) {
-            try {
-                await navigator.clipboard.writeText(text);
-                return true;
-            } catch {
-                const ta = document.createElement('textarea');
-                ta.value = text;
-                ta.style.position = 'fixed';
-                ta.style.opacity = '0';
-                document.body.appendChild(ta);
-                ta.focus();
-                ta.select();
-                let ok = false;
-                try { ok = document.execCommand('copy'); } catch { ok = false; }
-                ta.remove();
-                return ok;
-            }
-        }
-
-        function deriveGithubEditUrl() {
-            const explicit = TOUR_DATA?.repository?.roomsEditUrl;
-            if (explicit && !explicit.includes('YOUR_GITHUB_') && !explicit.includes('YOUR_REPOSITORY')) {
-                return explicit;
-            }
-
-            // 只在 GitHub Pages 標準網址上自動推算，例如：
-            // https://OWNER.github.io/REPO/
-            const host = location.hostname;
-            const pathParts = location.pathname.split('/').filter(Boolean);
-            const match = host.match(/^(.+)\.github\.io$/i);
-            if (!match) return '';
-
-            const owner = match[1];
-            const repo = pathParts[0] || `${owner}.github.io`;
-            return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/edit/main/data/rooms.txt`;
-        }
-
-        function cancelGuideEdit() {
-            delete document.body.dataset.guideEdit;
-            renderRooms();
-            if (!refreshTimer) refreshTimer = window.setInterval(refreshRoomsNow, REFRESH_MS);
         }
 
         function openGuideEdit() {
             const expected = String(ROOMS_DATA.guidePassword || '').trim();
             if (!expected) {
-                alert('目前 rooms.txt 沒有設定導遊密碼，無法進入修改模式。');
+                alert('rooms.txt 尚未設定導遊密碼。');
+                return;
+            }
+            if (!githubConfigured()) {
+                alert('目前 GitHub 寫入設定未完成，請由維護此網站的團員完成一次性 GitHub Token 設定。一般查閱功能不受影響。');
                 return;
             }
 
-            const password = window.prompt('請輸入導遊修改密碼：');
+            const password = window.prompt('請輸入導遊密碼：');
             if (password === null) return;
             if (password.trim() !== expected) {
-                alert('導遊密碼不正確，目前僅可查閱房號。');
+                alert('導遊密碼不正確，目前僅可檢視房號。');
                 return;
             }
 
-            // 這個密碼只在瀏覽器端解鎖批次編輯 UI；GitHub 的實際修改權仍由導遊自己的 GitHub 帳號決定。
-            document.body.dataset.guideEdit = '1';
+            guideEditMode = true;
             if (refreshTimer) {
                 clearInterval(refreshTimer);
                 refreshTimer = null;
@@ -525,51 +551,151 @@
             renderRooms();
         }
 
-        function prepareGithubCommit() {
-            if (document.body.dataset.guideEdit !== '1') {
-                alert('目前不是導遊編輯模式，無法修改房號。');
+        function cancelGuideEdit() {
+            guideEditMode = false;
+            roomSaveBusy = false;
+            renderRooms();
+            startRoomAutoRefresh();
+        }
+
+        function collectEditedRooms() {
+            return normalizeMembers().map(member => {
+                const input = document.getElementById(`room_edit_${member.id}`);
+                return { ...member, room: input ? input.value.trim() : member.room };
+            });
+        }
+
+        function buildRoomsText(members, password, token) {
+            const groupTitle = TOUR_DATA?.trip?.title || '旅遊團';
+            const groupNo = TOUR_DATA?.trip?.groupNo || '';
+            const lines = [
+                `# ${groupTitle} ${groupNo} 團員房號共同資料`,
+                '# ============================================================',
+                `# GUIDE_PASSWORD=${password}`,
+                `# GITHUB_TOKEN=${token}`,
+                '#',
+                '# 格式：ID|團員姓名|房號',
+                '# 空白房號請保留最後的 |。',
+                '# 本檔案為 GitHub Pages 唯一共同房號資料來源。',
+                '# ============================================================'
+            ];
+            members.forEach(member => lines.push(`${member.id}|${member.name}|${member.room}`));
+            return lines.join('\n') + '\n';
+        }
+
+        async function updateGithubRoomsFile(text, sha, attempt = 1) {
+            const c = githubConfig();
+            const response = await fetch(roomsApiUrl(), {
+                method: 'PUT',
+                headers: githubHeaders(),
+                body: JSON.stringify({
+                    message: `更新 ${TOUR_DATA?.trip?.groupNo || '旅遊團'} 團員房號`,
+                    content: utf8ToBase64(text),
+                    sha,
+                    branch: c.branch
+                })
+            });
+
+            if (response.ok) return response.json();
+
+            // GitHub Contents API 並行更新會產生 conflict；重抓最新 SHA 後重試。
+            // 官方文件列出 409 Conflict，且更新檔案要求 sha。
+            if ((response.status === 409 || response.status === 422) && attempt < 3) {
+                const latest = await fetchGithubRoomsFile();
+                if (!latest.sha) throw new Error('GitHub 最新 rooms.txt 沒有 SHA，無法重試。');
+                return updateGithubRoomsFile(text, latest.sha, attempt + 1);
+            }
+
+            let detail = '';
+            try { detail = await response.text(); } catch {}
+            throw new Error(`GitHub 寫入失敗 HTTP ${response.status}${detail ? '：' + detail.slice(0, 300) : ''}`);
+        }
+
+        async function saveRoomsToGithub() {
+            if (!guideEditMode || roomSaveBusy) return;
+            if (!githubConfigured()) {
+                alert('GitHub 寫入設定未完成。');
                 return;
             }
 
             const members = collectEditedRooms();
-            const seenIds = new Set();
-            for (const member of members) {
-                if (seenIds.has(member.id)) {
-                    alert(`團員 ID ${member.id} 重複，無法更新。`);
-                    return;
-                }
-                seenIds.add(member.id);
-                if (!String(member.name).trim()) {
-                    alert(`ID ${member.id} 的團員姓名為空白，無法更新。`);
-                    return;
-                }
-            }
-
-            const roomsText = buildRoomsText(members);
-            const copiedPromise = copyToClipboard(roomsText);
-            const editUrl = deriveGithubEditUrl();
-
-            if (!editUrl) {
-                alert(
-                    (copied
-                        ? '全部 15 位團員的最新房號已複製到剪貼簿。'
-                        : '全部 15 位團員的最新房號已整理完成，但目前瀏覽器無法複製到剪貼簿。') +
-                    '\n\n請到 GitHub Repository → data → rooms.txt → 編輯，\n全選舊內容後貼上本次完整內容，再按 Commit changes。'
-                );
+            if (!members.length) {
+                alert('目前沒有可編輯的團員資料。');
                 return;
             }
 
-            const actionText = '全部 15 位團員的最新房號已整理完成。\n\n系統會先嘗試複製完整 rooms.txt；若瀏覽器拒絕剪貼簿，仍可在 GitHub 編輯頁手動貼上或使用下載檔。\n\n開啟 GitHub 後：全選 rooms.txt 舊內容 → 貼上 → Commit changes。';
-
-            if (!confirm(actionText + '\n\n按「確定」開啟 GitHub rooms.txt 編輯頁。')) return;
-
-            // 同步建立下載備份，避免瀏覽器不允許 clipboard 時失去完整內容。
-            downloadRoomsText(roomsText);
-            copiedPromise.catch(() => {});
-            window.open(editUrl, '_blank', 'noopener,noreferrer');
-            delete document.body.dataset.guideEdit;
-            if (!refreshTimer) refreshTimer = window.setInterval(refreshRoomsNow, REFRESH_MS);
+            roomSaveBusy = true;
             renderRooms();
+
+            try {
+                // 先重新讀取 GitHub 最新版本，避免直接覆蓋別人剛修改的內容。
+                const latest = await fetchGithubRoomsFile();
+                const latestParsed = parseRooms(latest.text);
+                const password = latestParsed.guidePassword || ROOMS_DATA.guidePassword;
+                const token = latestParsed.githubToken || ROOMS_DATA.githubToken;
+                if (!latest.sha) throw new Error('GitHub 沒有取得 rooms.txt SHA。');
+
+                // 最新版本若已有不同團員資料名稱，以 tour.json 為顯示主檔；房號使用導遊目前編輯值。
+                const finalText = buildRoomsText(members, password, token);
+                await updateGithubRoomsFile(finalText, latest.sha);
+
+                // 立即以剛剛寫入的版本更新本機畫面，避免等待 GitHub Pages CDN。
+                ROOMS_DATA = parseRooms(finalText);
+                guideEditMode = false;
+                roomSaveBusy = false;
+                renderRooms();
+                startRoomAutoRefresh();
+                alert(`已成功更新全部 ${members.length} 位團員房號。\n\nGitHub 已完成 Commit，其他團員重新整理或等待同步即可看到最新資料。`);
+            } catch (error) {
+                roomSaveBusy = false;
+                renderRooms();
+                console.error(error);
+                alert('房號儲存失敗：\n' + (error.message || error));
+            }
+        }
+
+        function copyText(text) {
+            navigator.clipboard.writeText(text)
+                .then(() => alert('已成功複製地址：\n' + text))
+                .catch(() => alert('複製失敗，請手動選取複製。'));
+        }
+
+        function convertCurrency() {
+            const jpy = Number(document.getElementById('jpy-input')?.value || 0);
+            const rate = Number(TOUR_DATA?.trip?.exchangeRate || 0);
+            document.getElementById('twd-output').innerText = Math.round(jpy * rate).toLocaleString() + ' NTD';
+        }
+
+        async function fetchWeather() {
+            const weather = TOUR_DATA?.trip?.weather;
+            if (!weather) return;
+            const info = document.getElementById('weather-info');
+            info.innerText = '資料同步中...';
+            try {
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(weather.latitude)}&longitude=${encodeURIComponent(weather.longitude)}&daily=temperature_2m_max,precipitation_probability_max&timezone=${encodeURIComponent(weather.timezone)}`;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('weather HTTP ' + response.status);
+                const data = await response.json();
+                const temps = data?.daily?.temperature_2m_max || [];
+                const rains = data?.daily?.precipitation_probability_max || [];
+                info.innerText = temps.length ? `預測最高溫 ${temps[0]}°C，降雨機率 ${rains[0] ?? '--'}%` : '無可用天氣資料';
+                (TOUR_DATA.itinerary || []).forEach(day => {
+                    const index = Number(day.day) - 1;
+                    const temp = document.getElementById(`temp-d${day.day}`);
+                    const rain = document.getElementById(`rain-d${day.day}`);
+                    if (temp && temps[index] !== undefined) temp.innerText = temps[index];
+                    if (rain && rains[index] !== undefined) rain.innerText = rains[index];
+                });
+            } catch {
+                info.innerText = '無法取得即時資料';
+            }
+        }
+
+        function startRoomAutoRefresh() {
+            if (refreshTimer) clearInterval(refreshTimer);
+            refreshTimer = window.setInterval(() => {
+                if (!guideEditMode && !roomSaveBusy) refreshRoomsNow().catch(console.error);
+            }, REFRESH_MS);
         }
 
         async function bootstrap() {
@@ -582,16 +708,17 @@
                 renderTools();
                 await refreshRoomsNow();
                 await fetchWeather();
-                refreshTimer = window.setInterval(refreshRoomsNow, REFRESH_MS);
-            } catch (e) {
+                startRoomAutoRefresh();
+            } catch (error) {
+                console.error(error);
                 document.getElementById('weather-info').innerText = '旅遊資料載入失敗，請檢查 GitHub data 檔案。';
-                // 房號區由 refreshRoomsNow() 自己顯示詳細錯誤，避免把旅遊資料錯誤誤報成房號錯誤。
-                refreshRoomsNow().catch(console.error);
-                console.error(e);
+                document.getElementById('room-list-container').innerHTML = `<div class="text-xs text-red-500 py-3">${escapeHtml(error.message || error)}<button onclick="location.reload()" class="mt-3 w-full bg-slate-50 border border-slate-200 text-slate-600 py-2 rounded-lg font-bold">重新載入</button></div>`;
             }
         }
 
-        window.addEventListener('beforeunload', () => { if (refreshTimer) clearInterval(refreshTimer); });
+        window.addEventListener('beforeunload', () => {
+            if (refreshTimer) clearInterval(refreshTimer);
+        });
         window.addEventListener('load', bootstrap);
     </script>
 </body>
