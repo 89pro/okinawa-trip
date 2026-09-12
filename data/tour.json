@@ -332,8 +332,8 @@
     ]
   },
   "github": {
-    "owner": "YOUR_GITHUB_OWNER",
-    "repo": "YOUR_GITHUB_REPOSITORY",
+    "owner": "89pro",
+    "repo": "okinawa-trip",
     "branch": "main",
     "roomsPath": "data/rooms.txt",
     "apiBase": "https://api.github.com"
