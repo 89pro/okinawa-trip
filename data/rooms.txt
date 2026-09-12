@@ -1,7 +1,7 @@
 # 沖繩 26091304D 團員房號共同資料
 # ============================================================
 # GUIDE_PASSWORD=260913
-# GITHUB_TOKEN=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
+# GITHUB_TOKEN=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
 # 格式：ID|團員姓名|房號
 # 空白房號請保留最後的 |。
 # 本檔案為 GitHub Pages 唯一共同房號資料來源。
