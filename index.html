@@ -325,67 +325,262 @@
             document.getElementById('trip-subtitle').textContent = `${trip.dateText || ''}${trip.leader ? ` | 領隊：${trip.leader}` : ''}`;
             document.getElementById('weather-title').textContent = `${trip.weather?.locationName || ''}實時天氣預報`;
         }
-
         function renderItinerary() {
-            const container = document.getElementById('itinerary-container');
-            const days = Array.isArray(TOUR_DATA.itinerary) ? TOUR_DATA.itinerary : [];
-            let html = '';
+    const container = document.getElementById('itinerary-container');
+    const days = Array.isArray(TOUR_DATA?.itinerary)
+        ? TOUR_DATA.itinerary
+        : [];
 
-            days.forEach(day => {
-                const events = Array.isArray(day.events) ? day.events : [];
-                html += `
-                <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
-                    <div class="flex justify-between items-end border-b pb-2 border-slate-100">
-                        <span class="text-xl font-black text-sky-600 tracking-tight">DAY ${escapeHtml(day.day)} <span class="text-sm text-slate-400 font-medium ml-1">${escapeHtml(day.dateText || '')}</span></span>
-                        <span class="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded font-medium">降雨 <span id="rain-d${escapeHtml(day.day)}" class="font-bold text-slate-700">--</span>% | <span id="temp-d${escapeHtml(day.day)}" class="font-bold text-slate-700">--</span>°C</span>
+    let html = '';
+
+    days.forEach(day => {
+        const events = Array.isArray(day.events) ? day.events : [];
+
+        html += `
+            <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
+
+                <!-- DAY 標題 -->
+                <div class="flex justify-between items-end border-b pb-2 border-slate-100">
+                    <span class="text-xl font-black text-sky-600 tracking-tight">
+                        DAY ${escapeHtml(day.day)}
+                        <span class="text-sm text-slate-400 font-medium ml-1">
+                            ${escapeHtml(day.dateText || '')}
+                        </span>
+                    </span>
+
+                    <span class="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded font-medium">
+                        降雨
+                        <span id="rain-d${escapeHtml(day.day)}"
+                              class="font-bold text-slate-700">--</span>%
+                        |
+                        <span id="temp-d${escapeHtml(day.day)}"
+                              class="font-bold text-slate-700">--</span>°C
+                    </span>
+                </div>
+
+                <!-- 行程 -->
+                <div class="space-y-4 text-sm mt-3">
+        `;
+
+        events.forEach(event => {
+            const borderClass = event.last
+                ? 'border-transparent'
+                : '';
+
+            /* ---------------------------------------------------------
+             * ① 標題：有 mapQuery 就做成 Google Maps 連結
+             * --------------------------------------------------------- */
+            const titleHtml = event.mapQuery
+                ? `
+                    <a
+                        href="${mapsUrl(event.mapQuery)}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="font-bold text-sky-600 hover:text-sky-800 transition-colors block"
+                    >
+                        <i class="fa-solid fa-location-dot mr-1"></i>
+                        ${escapeHtml(event.title || '')}
+                    </a>
+                `
+                : `
+                    <p class="font-bold text-slate-800">
+                        ${escapeHtml(event.title || '')}
+                    </p>
+                `;
+
+            /* ---------------------------------------------------------
+             * ② 餐別 Badge
+             *    一個 event 最多只輸出一次
+             * --------------------------------------------------------- */
+            let tagHtml = '';
+
+            if (event.tag) {
+                tagHtml = `
+                    <div class="font-bold text-slate-800 mt-1">
+                        <span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs mr-1">
+                            ${escapeHtml(event.tag)}
+                        </span>
+                        ${escapeHtml(
+                            event.detail ||
+                            (!event.mapQuery ? event.title : '') ||
+                            ''
+                        )}
                     </div>
-                    <div class="space-y-4 text-sm mt-3">`;
+                `;
+            } else if (event.detail) {
+                tagHtml = `
+                    <p class="font-bold text-slate-800 mt-1">
+                        ${escapeHtml(event.detail)}
+                    </p>
+                `;
+            }
 
-                events.forEach(event => {
-                    const borderClass = event.last ? 'border-transparent' : '';
-                    const titleHtml = event.mapQuery
-                        ? `<a href="${mapsUrl(event.mapQuery)}" target="_blank" rel="noopener" class="font-bold text-sky-600 hover:text-sky-800 transition-colors block"><i class="fa-solid fa-location-dot mr-1"></i>${escapeHtml(event.title)}</a>`
-                        : `<p class="font-bold text-slate-800">${escapeHtml(event.title || '')}</p>`;
+            /* ---------------------------------------------------------
+             * ③ 完整行程事件
+             * --------------------------------------------------------- */
+            html += `
+                <div class="timeline-border ${borderClass}">
+
+                    <p class="text-xs text-slate-400 font-medium mb-0.5">
+                        ${escapeHtml(event.time || '')}
+                    </p>
+
+                    ${titleHtml}
+
+                    ${tagHtml}
+
+                    ${
+                        event.description
+                            ? `
+                                <p class="text-xs text-slate-500 mt-1 leading-relaxed">
+                                    ${escapeHtml(event.description)}
+                                </p>
+                              `
+                            : ''
+                    }
+
+                    ${
+                        event.warning
+                            ? `
+                                <p class="text-xs text-red-600 font-bold mt-1">
+                                    ※ 提醒：${escapeHtml(event.warning)}
+                                </p>
+                              `
+                            : ''
+                    }
+
+                </div>
+            `;
+        });
+
+        html += `
+                </div>
+        `;
+
+        /* =============================================================
+         * 住宿
+         * ============================================================= */
+        if (day.hotel) {
+            const hotel = day.hotel;
+
+            html += `
+                <div class="mt-2 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl border border-slate-100">
+
+                    <p class="text-xs text-slate-400 font-bold mb-1.5">
+                        <i class="fa-solid fa-hotel mr-1"></i>
+                        今夜住宿
+                    </p>
+
+                    <div class="flex justify-between items-start mb-2">
+            `;
+
+            /* 飯店名稱 */
+            if (hotel.mapQuery) {
+                html += `
+                    <a
+                        href="${mapsUrl(hotel.mapQuery)}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="font-bold text-slate-800 hover:text-sky-600 text-sm leading-tight transition-colors"
+                    >
+                        ${escapeHtml(hotel.name || '')}
+                    </a>
+                `;
+            } else {
+                html += `
+                    <p class="font-bold text-slate-800 text-sm leading-tight">
+                        ${escapeHtml(hotel.name || '')}
+                    </p>
+                `;
+            }
+
+            /* 地址複製按鈕 */
+            if (hotel.address) {
+                html += `
+                    <button
+                        onclick="copyText(${JSON.stringify(hotel.address)})"
+                        class="text-xs bg-white border border-slate-200 px-2 py-1 rounded text-slate-600 hover:bg-slate-100 ml-2 shrink-0 shadow-sm transition-colors"
+                    >
+                        <i class="fa-regular fa-copy"></i>
+                        地址
+                    </button>
+                `;
+            }
+
+            html += `
+                    </div>
+            `;
+
+            /* 地址 */
+            if (hotel.address) {
+                html += `
+                    <p class="text-xs text-slate-500 mb-2">
+                        ${escapeHtml(hotel.address)}
+                    </p>
+                `;
+            }
+
+            /* 飯店備註，例如「連住第二晚」 */
+            if (hotel.note) {
+                html += `
+                    <p class="text-xs text-slate-500 mb-2">
+                        ${escapeHtml(hotel.note)}
+                    </p>
+                `;
+            }
+
+            /* 周邊設施 */
+            if (hotel.supermarketQuery || hotel.laundromatQuery) {
+                html += `
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                `;
+
+                if (hotel.supermarketQuery) {
                     html += `
-                        <div class="timeline-border ${borderClass}">
-                            <p class="text-xs text-slate-400 font-medium mb-0.5">${escapeHtml(event.time || '')}</p>
-                            ${event.tag ? `<p class="font-bold text-slate-800 mt-1"><span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs mr-1">${escapeHtml(event.tag)}</span>${event.mapQuery ? '' : escapeHtml(event.title || '')}</p>` : titleHtml}
-                            ${event.tag && event.mapQuery ? `<p class="font-bold text-slate-800 mt-1"><span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs mr-1">${escapeHtml(event.tag)}</span>${escapeHtml(event.detail || '')}</p>` : ''}
-                            ${!event.tag && event.detail ? `<p class="font-bold text-slate-800 mt-1">${escapeHtml(event.detail)}</p>` : ''}
-                            ${event.description ? `<p class="text-xs text-slate-500 mt-1 leading-relaxed">${escapeHtml(event.description)}</p>` : ''}
-                            ${event.warning ? `<p class="text-xs text-red-600 font-bold mt-1">※ 提醒：${escapeHtml(event.warning)}</p>` : ''}
-                        </div>`;
-                });
-
-                if (day.hotel) {
-                    html += `<div class="mt-2 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl border border-slate-100">`;
-                    html += `<p class="text-xs text-slate-400 font-bold mb-1.5"><i class="fa-solid fa-hotel mr-1"></i>今夜住宿</p>`;
-                    html += `<div class="flex justify-between items-start mb-2">`;
-                    if (day.hotel.mapQuery) {
-                        html += `<a href="${mapsUrl(day.hotel.mapQuery)}" target="_blank" rel="noopener" class="font-bold text-slate-800 hover:text-sky-600 text-sm leading-tight transition-colors">${escapeHtml(day.hotel.name || '')}</a>`;
-                    } else {
-                        html += `<p class="font-bold text-slate-800 text-sm leading-tight">${escapeHtml(day.hotel.name || '')}</p>`;
-                    }
-                    if (day.hotel.address) {
-                        html += `<button onclick="copyText('${escapeHtml(day.hotel.address).replace(/'/g, "\\'")}')" class="text-xs bg-white border border-slate-200 px-2 py-1 rounded text-slate-600 hover:bg-slate-100 ml-2 shrink-0 shadow-sm transition-colors"><i class="fa-regular fa-copy"></i> 地址</button>`;
-                    }
-                    html += `</div>`;
-                    if (day.hotel.address) html += `<p class="text-xs text-slate-500 mb-2">${escapeHtml(day.hotel.address)}</p>`;
-                    if (day.hotel.supermarketQuery || day.hotel.laundromatQuery) {
-                        html += `<div class="grid grid-cols-2 gap-2 text-xs">`;
-                        if (day.hotel.supermarketQuery) html += `<a href="${mapsUrl(day.hotel.supermarketQuery)}" target="_blank" rel="noopener" class="bg-emerald-50 text-emerald-700 border border-emerald-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-emerald-100 transition-colors"><i class="fa-solid fa-cart-shopping mr-1"></i>周邊超市</a>`;
-                        if (day.hotel.laundromatQuery) html += `<a href="${mapsUrl(day.hotel.laundromatQuery)}" target="_blank" rel="noopener" class="bg-indigo-50 text-indigo-700 border border-indigo-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-indigo-100 transition-colors"><i class="fa-solid fa-jug-detergent mr-1"></i>自助洗衣</a>`;
-                        html += `</div>`;
-                    }
-                    html += `</div>`;
+                        <a
+                            href="${mapsUrl(hotel.supermarketQuery)}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="bg-emerald-50 text-emerald-700 border border-emerald-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-emerald-100 transition-colors"
+                        >
+                            <i class="fa-solid fa-cart-shopping mr-1"></i>
+                            周邊超市
+                        </a>
+                    `;
                 }
 
-                html += `</section>`;
-            });
+                if (hotel.laundromatQuery) {
+                    html += `
+                        <a
+                            href="${mapsUrl(hotel.laundromatQuery)}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="bg-indigo-50 text-indigo-700 border border-indigo-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-indigo-100 transition-colors"
+                        >
+                            <i class="fa-solid fa-jug-detergent mr-1"></i>
+                            自助洗衣
+                        </a>
+                    `;
+                }
 
-            container.innerHTML = html;
+                html += `
+                    </div>
+                `;
+            }
+
+            html += `
+                </div>
+            `;
         }
 
+        html += `
+            </section>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+        
         function renderChecklist() {
             const container = document.getElementById('checklist-container');
             const items = Array.isArray(TOUR_DATA.checklist) ? TOUR_DATA.checklist : [];
