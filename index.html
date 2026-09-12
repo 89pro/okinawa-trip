@@ -102,6 +102,8 @@
         const ROOMS_URL = 'data/rooms.txt';
         const ROOMS_API_FALLBACK = 'https://api.github.com';
         const REFRESH_MS = 15000;
+        const APPS_SCRIPT_URL = TOUR_DATA?.appsScriptUrl || '';
+        let pendingGuidePassword = '';
         const STORAGE_KEY_CHECKLIST_PREFIX = 'tour_checklist_';
 
         let TOUR_DATA = null;
@@ -142,38 +144,24 @@
                 throw new Error('tour.json 內容不是有效物件。');
             }
         }
-
         function parseRooms(text) {
-            const result = { members: [], guidePassword: '', githubToken: '' };
-            const seenIds = new Set();
-
-            for (const rawLine of String(text || '').split(/\r?\n/)) {
-                const line = rawLine.trim();
-                if (!line) continue;
-
-                if (line.startsWith('#')) {
-                    let match = line.match(/^#\s*GUIDE_PASSWORD\s*=\s*(.*?)\s*$/i);
-                    if (match) result.guidePassword = match[1];
-                    match = line.match(/^#\s*GITHUB_TOKEN\s*=\s*(.*?)\s*$/i);
-                    if (match) result.githubToken = match[1];
-                    continue;
-                }
-
-                const parts = line.split('|');
-                if (parts.length < 3) continue;
-
-                const id = Number(parts[0].trim());
-                const name = parts[1].trim();
-                const room = parts.slice(2).join('|').trim();
-
-                if (!Number.isInteger(id) || id < 1 || !name || seenIds.has(id)) continue;
-                seenIds.add(id);
-                result.members.push({ id, name, room });
-            }
-
-            result.members.sort((a, b) => a.id - b.id);
-            return result;
-        }
+    const result = { members: [] };
+    const seenIds = new Set();
+    for (const rawLine of String(text || '').split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith('#')) continue;
+        const parts = line.split('|');
+        if (parts.length < 3) continue;
+        const id = Number(parts[0].trim());
+        const name = parts[1].trim();
+        const room = parts.slice(2).join('|').trim();
+        if (!Number.isInteger(id) || id < 1 || !name || seenIds.has(id)) continue;
+        seenIds.add(id);
+        result.members.push({ id, name, room });
+    }
+    result.members.sort((a, b) => a.id - b.id);
+    return result;
+}
 
         function normalizeMembers() {
             const dataMembers = Array.isArray(TOUR_DATA?.members) ? TOUR_DATA.members : [];
@@ -189,81 +177,8 @@
             });
         }
 
-        function githubConfig() {
-            const config = TOUR_DATA?.github || {};
-            return {
-                owner: String(config.owner || '').trim(),
-                repo: String(config.repo || '').trim(),
-                branch: String(config.branch || 'main').trim(),
-                roomsPath: String(config.roomsPath || 'data/rooms.txt').trim(),
-                apiBase: String(config.apiBase || ROOMS_API_FALLBACK).replace(/\/$/, ''),
-            };
-        }
 
-        function githubConfigured() {
-            const c = githubConfig();
-            return Boolean(c.owner && c.repo && c.branch && c.roomsPath && ROOMS_DATA.githubToken);
-        }
 
-        function roomsApiUrl() {
-            const c = githubConfig();
-            const path = c.roomsPath.split('/').map(encodeURIComponent).join('/');
-            return `${c.apiBase}/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${path}?ref=${encodeURIComponent(c.branch)}`;
-        }
-
-        function utf8ToBase64(text) {
-            const bytes = new TextEncoder().encode(String(text));
-            let binary = '';
-            const chunkSize = 0x8000;
-            for (let i = 0; i < bytes.length; i += chunkSize) {
-                binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-            }
-            return btoa(binary);
-        }
-
-        function base64ToUtf8(base64) {
-            const normalized = String(base64 || '').replace(/\n/g, '');
-            const binary = atob(normalized);
-            const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
-            return new TextDecoder('utf-8').decode(bytes);
-        }
-
-        function githubHeaders() {
-            return {
-                'Accept': 'application/vnd.github+json',
-                'Authorization': `Bearer ${ROOMS_DATA.githubToken}`,
-                'X-GitHub-Api-Version': '2026-03-10',
-                'Content-Type': 'application/json'
-            };
-        }
-
-        async function fetchGithubRoomsFile() {
-            if (!githubConfigured()) {
-                // 公開查閱不需要 Token：fallback 到 GitHub Pages 靜態檔案。
-                return { text: await fetchText(ROOMS_URL), sha: null, viaApi: false };
-            }
-
-            const response = await fetch(roomsApiUrl(), {
-                method: 'GET',
-                headers: githubHeaders(),
-                cache: 'no-store'
-            });
-
-            if (!response.ok) {
-                throw new Error(`GitHub 讀取失敗 HTTP ${response.status}`);
-            }
-
-            const payload = await response.json();
-            if (!payload?.content || !payload?.sha) {
-                throw new Error('GitHub API 回傳缺少 rooms.txt content / sha。');
-            }
-
-            return {
-                text: base64ToUtf8(payload.content),
-                sha: payload.sha,
-                viaApi: true
-            };
-        }
 
         function renderMeta() {
             const trip = TOUR_DATA.trip || {};
@@ -511,53 +426,45 @@
         }
 
         async function refreshRoomsNow() {
-            if (guideEditMode || roomSaveBusy) return;
-            const container = document.getElementById('room-list-container');
-            try {
-                const result = await fetchGithubRoomsFile();
-                const parsed = parseRooms(result.text);
-                if (!parsed.members.length) throw new Error('rooms.txt 沒有有效的團員資料。');
-                ROOMS_DATA = parsed;
-                renderRooms();
-            } catch (error) {
-                container.innerHTML = `<div class="text-xs text-red-500 leading-relaxed py-3"><p class="font-bold">共享房號資料載入失敗</p><p class="mt-1">${escapeHtml(error.message || error)}</p><button onclick="refreshRoomsNow()" class="mt-3 w-full bg-slate-50 border border-slate-200 text-slate-600 py-2 rounded-lg font-bold hover:bg-slate-100">重新讀取</button></div>`;
-                console.error(error);
-            }
-        }
+    if (guideEditMode || roomSaveBusy) return;
+    const container = document.getElementById('room-list-container');
+    try {
+        const text = await fetchText(ROOMS_URL);
+        const parsed = parseRooms(text);
+        if (!parsed.members.length) throw new Error('rooms.txt 沒有有效的團員資料。');
+        ROOMS_DATA = parsed;
+        renderRooms();
+    } catch (error) {
+        container.innerHTML = `<div class="text-xs text-red-500 leading-relaxed py-3"><p class="font-bold">共享房號資料載入失敗</p><p class="mt-1">${escapeHtml(error.message || error)}</p><button onclick="refreshRoomsNow()" class="mt-3 w-full bg-slate-50 border border-slate-200 text-slate-600 py-2 rounded-lg font-bold hover:bg-slate-100">重新讀取</button></div>`;
+        console.error(error);
+    }
+}
 
         function openGuideEdit() {
-            const expected = String(ROOMS_DATA.guidePassword || '').trim();
-            if (!expected) {
-                alert('rooms.txt 尚未設定導遊密碼。');
-                return;
-            }
-            if (!githubConfigured()) {
-                alert('目前 GitHub 寫入設定未完成，請由維護此網站的團員完成一次性 GitHub Token 設定。一般查閱功能不受影響。');
-                return;
-            }
-
-            const password = window.prompt('請輸入導遊密碼：');
-            if (password === null) return;
-            if (password.trim() !== expected) {
-                alert('導遊密碼不正確，目前僅可檢視房號。');
-                return;
-            }
-
-            guideEditMode = true;
-            if (refreshTimer) {
-                clearInterval(refreshTimer);
-                refreshTimer = null;
-            }
-            renderRooms();
-        }
+    const password = window.prompt('請輸入導遊密碼：');
+    if (password === null) return;
+    if (!password.trim()) {
+        alert('請輸入密碼。');
+        return;
+    }
+    // 正確密碼只存在 Apps Script 端，前端無從驗證，
+    // 對錯要等按下「儲存」時由伺服器回覆才知道。
+    pendingGuidePassword = password.trim();
+    guideEditMode = true;
+    if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+    }
+    renderRooms();
+}
 
         function cancelGuideEdit() {
-            guideEditMode = false;
-            roomSaveBusy = false;
-            renderRooms();
-            startRoomAutoRefresh();
-        }
-
+    guideEditMode = false;
+    roomSaveBusy = false;
+    pendingGuidePassword = '';
+    renderRooms();
+    startRoomAutoRefresh();
+}
         function collectEditedRooms() {
             return normalizeMembers().map(member => {
                 const input = document.getElementById(`room_edit_${member.id}`);
@@ -565,94 +472,47 @@
             });
         }
 
-        function buildRoomsText(members, password, token) {
-            const groupTitle = TOUR_DATA?.trip?.title || '旅遊團';
-            const groupNo = TOUR_DATA?.trip?.groupNo || '';
-            const lines = [
-                `# ${groupTitle} ${groupNo} 團員房號共同資料`,
-                '# ============================================================',
-                `# GUIDE_PASSWORD=${password}`,
-                `# GITHUB_TOKEN=${token}`,
-                '#',
-                '# 格式：ID|團員姓名|房號',
-                '# 空白房號請保留最後的 |。',
-                '# 本檔案為 GitHub Pages 唯一共同房號資料來源。',
-                '# ============================================================'
-            ];
-            members.forEach(member => lines.push(`${member.id}|${member.name}|${member.room}`));
-            return lines.join('\n') + '\n';
-        }
-
-        async function updateGithubRoomsFile(text, sha, attempt = 1) {
-            const c = githubConfig();
-            const response = await fetch(roomsApiUrl(), {
-                method: 'PUT',
-                headers: githubHeaders(),
-                body: JSON.stringify({
-                    message: `更新 ${TOUR_DATA?.trip?.groupNo || '旅遊團'} 團員房號`,
-                    content: utf8ToBase64(text),
-                    sha,
-                    branch: c.branch
-                })
-            });
-
-            if (response.ok) return response.json();
-
-            // GitHub Contents API 並行更新會產生 conflict；重抓最新 SHA 後重試。
-            // 官方文件列出 409 Conflict，且更新檔案要求 sha。
-            if ((response.status === 409 || response.status === 422) && attempt < 3) {
-                const latest = await fetchGithubRoomsFile();
-                if (!latest.sha) throw new Error('GitHub 最新 rooms.txt 沒有 SHA，無法重試。');
-                return updateGithubRoomsFile(text, latest.sha, attempt + 1);
-            }
-
-            let detail = '';
-            try { detail = await response.text(); } catch {}
-            throw new Error(`GitHub 寫入失敗 HTTP ${response.status}${detail ? '：' + detail.slice(0, 300) : ''}`);
-        }
 
         async function saveRoomsToGithub() {
-            if (!guideEditMode || roomSaveBusy) return;
-            if (!githubConfigured()) {
-                alert('GitHub 寫入設定未完成。');
-                return;
-            }
+    if (!guideEditMode || roomSaveBusy) return;
+    if (!APPS_SCRIPT_URL) {
+        alert('tour.json 缺少 appsScriptUrl 設定，無法儲存。');
+        return;
+    }
 
-            const members = collectEditedRooms();
-            if (!members.length) {
-                alert('目前沒有可編輯的團員資料。');
-                return;
-            }
+    const members = collectEditedRooms().map(m => ({ id: m.id, name: m.name, room: m.room }));
+    if (!members.length) {
+        alert('目前沒有可編輯的團員資料。');
+        return;
+    }
 
-            roomSaveBusy = true;
-            renderRooms();
+    roomSaveBusy = true;
+    renderRooms();
 
-            try {
-                // 先重新讀取 GitHub 最新版本，避免直接覆蓋別人剛修改的內容。
-                const latest = await fetchGithubRoomsFile();
-                const latestParsed = parseRooms(latest.text);
-                const password = latestParsed.guidePassword || ROOMS_DATA.guidePassword;
-                const token = latestParsed.githubToken || ROOMS_DATA.githubToken;
-                if (!latest.sha) throw new Error('GitHub 沒有取得 rooms.txt SHA。');
+    try {
+        // 用 text/plain 送出以避開 CORS 預檢請求，Apps Script 端會自行 JSON.parse()。
+        const response = await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ password: pendingGuidePassword, members })
+        });
+        const result = await response.json();
+        if (!result.ok) throw new Error(result.error || '未知錯誤');
 
-                // 最新版本若已有不同團員資料名稱，以 tour.json 為顯示主檔；房號使用導遊目前編輯值。
-                const finalText = buildRoomsText(members, password, token);
-                await updateGithubRoomsFile(finalText, latest.sha);
-
-                // 立即以剛剛寫入的版本更新本機畫面，避免等待 GitHub Pages CDN。
-                ROOMS_DATA = parseRooms(finalText);
-                guideEditMode = false;
-                roomSaveBusy = false;
-                renderRooms();
-                startRoomAutoRefresh();
-                alert(`已成功更新全部 ${members.length} 位團員房號。\n\nGitHub 已完成 Commit，其他團員重新整理或等待同步即可看到最新資料。`);
-            } catch (error) {
-                roomSaveBusy = false;
-                renderRooms();
-                console.error(error);
-                alert('房號儲存失敗：\n' + (error.message || error));
-            }
-        }
+        ROOMS_DATA = { members };
+        guideEditMode = false;
+        roomSaveBusy = false;
+        pendingGuidePassword = '';
+        renderRooms();
+        startRoomAutoRefresh();
+        alert(`已成功更新全部 ${members.length} 位團員房號。`);
+    } catch (error) {
+        roomSaveBusy = false;
+        renderRooms();
+        console.error(error);
+        alert('房號儲存失敗：\n' + (error.message || error));
+    }
+}
 
         function copyText(text) {
             navigator.clipboard.writeText(text)

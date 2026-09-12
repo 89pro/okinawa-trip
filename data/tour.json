@@ -332,10 +332,11 @@
     ]
   },
   "github": {
-    "owner": "89pro",
-    "repo": "okinawa-trip",
+    "owner": "YOUR_GITHUB_OWNER",
+    "repo": "YOUR_GITHUB_REPOSITORY",
     "branch": "main",
     "roomsPath": "data/rooms.txt",
     "apiBase": "https://api.github.com"
-  }
+  },
+  "appsScriptUrl": "https://script.google.com/macros/s/AKfycbwFNBNnScPQhwM3XOnJWabNKVQ_Adyf8xelQZsiQZ4JoKJyX"
 }
