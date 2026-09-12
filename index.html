@@ -85,16 +85,16 @@
         /* ============================================================
          * 旅遊框架：資料與視圖分離
          * ------------------------------------------------------------
-         * 只需修改 /data/tour.json 與 /data/rooms.txt，即可重複利用同一套 UI。
-         * 本 HTML 不保存共同房號；房號一律從 GitHub 讀取。
+         * 1. /data/tour.json：旅遊內容（航班、行程、住宿、團員、工具）
+         * 2. /data/rooms.txt：全團共同房號 + 導遊防誤操作密碼
+         * 3. GitHub Pages：所有人查閱
+         * 4. GitHub 本身：只有具有 Repository 寫入權限的導遊可修改 rooms.txt
+         *
          * ============================================================ */
         const DATA_URL = './data/tour.json';
         const ROOMS_URL = './data/rooms.txt';
         const REFRESH_MS = 15000;
         const STORAGE_KEY_CHECKLIST = 'tour_26091304D_checklist';
-
-        /* 導遊僅需在 GitHub 編輯 rooms.txt；此連結由目前頁面推導，無須 API Token。 */
-        const GITHUB_EDIT_URL = ''; // 例：https://github.com/帳號/Repository/edit/main/data/rooms.txt
 
         let TOUR_DATA = null;
         let ROOMS_DATA = { members: [], guidePassword: '' };
@@ -103,8 +103,11 @@
 
         function escapeHtml(value) {
             return String(value ?? '')
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         function mapsUrl(query) {
@@ -112,13 +115,19 @@
         }
 
         async function fetchText(url) {
-            const response = await fetch(url + '?t=' + Date.now(), { cache: 'no-store' });
+            const response = await fetch(url + '?t=' + Date.now(), {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache' }
+            });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.text();
         }
 
         async function loadTourData() {
-            const response = await fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' });
+            const response = await fetch(DATA_URL + '?t=' + Date.now(), {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache' }
+            });
             if (!response.ok) throw new Error(`tour.json HTTP ${response.status}`);
             TOUR_DATA = await response.json();
         }
@@ -128,11 +137,14 @@
             for (const rawLine of String(text || '').split(/\r?\n/)) {
                 const line = rawLine.trim();
                 if (!line) continue;
+
+                // 導遊密碼依需求直接記錄於 GitHub 文字檔中，僅作為「防君子」的前端提示。
                 if (line.startsWith('#')) {
                     const m = line.match(/^#\s*GUIDE_PASSWORD\s*=\s*(.*)\s*$/i);
                     if (m) result.guidePassword = m[1];
                     continue;
                 }
+
                 const parts = line.split('|');
                 if (parts.length >= 3 && /^\d+$/.test(parts[0].trim())) {
                     result.members.push({
@@ -145,14 +157,13 @@
             return result;
         }
 
-        function roomsMap() {
-            return new Map(ROOMS_DATA.members.map(m => [m.id, m.room]));
-        }
-
         function normalizeMembers() {
             const dataMembers = Array.isArray(TOUR_DATA?.members) ? TOUR_DATA.members : [];
             const parsed = new Map(ROOMS_DATA.members.map(m => [m.id, m]));
-            return dataMembers.map(m => ({ ...m, room: parsed.get(Number(m.id))?.room || '' }));
+            return dataMembers.map(m => ({
+                ...m,
+                room: parsed.get(Number(m.id))?.room || ''
+            }));
         }
 
         function renderMeta() {
@@ -171,6 +182,7 @@
                 container.innerHTML = '<p class="text-xs text-slate-400 text-center py-3">目前沒有團員資料。</p>';
                 return;
             }
+
             let html = '';
             members.forEach(member => {
                 html += `
@@ -181,6 +193,7 @@
                         </span>
                     </div>`;
             });
+
             html += `
                 <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
                     <div class="flex items-center gap-1"><span class="sync-dot ok"></span>房號資料：GitHub 共用檔案</div>
@@ -189,6 +202,7 @@
                         <button onclick="refreshRoomsNow()" class="flex-1 bg-slate-50 border border-slate-200 text-slate-600 py-1.5 rounded-lg font-bold hover:bg-slate-100"><i class="fa-solid fa-rotate mr-1"></i>重新讀取</button>
                         <button onclick="openGuideEdit()" class="flex-1 bg-sky-50 border border-sky-200 text-sky-700 py-1.5 rounded-lg font-bold hover:bg-sky-100"><i class="fa-brands fa-github mr-1"></i>導遊修改</button>
                     </div>
+                    <div class="mt-2">一般團員：只能查閱。導遊：請以具有 GitHub 寫入權限的帳號修改。</div>
                 </div>`;
             container.innerHTML = html;
         }
@@ -212,18 +226,20 @@
                         ${titleWithTag}${detail}${warning}${description}
                     </div>`;
                 }).join('');
+
                 const h = day.hotel;
                 let hotelHtml = '';
                 if (h) {
-                    if (day.day === 3 && h.note) {
+                    if (h.note) {
                         hotelHtml = `<div class="mt-2 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center justify-between"><div><p class="text-xs text-slate-400 font-bold mb-1"><i class="fa-solid fa-hotel mr-1"></i>今夜住宿</p><p class="font-bold text-slate-800 text-sm">${escapeHtml(h.name)} <span class="text-xs font-normal text-slate-500 ml-1">(${escapeHtml(h.note)})</span></p></div></div>`;
                     } else if (h.name) {
                         hotelHtml = `<div class="mt-2 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl border border-slate-100"><p class="text-xs text-slate-400 font-bold mb-1.5"><i class="fa-solid fa-hotel mr-1"></i>今夜住宿</p><div class="flex justify-between items-start mb-2"><a href="${mapsUrl(h.mapQuery || h.name)}" target="_blank" rel="noopener" class="font-bold text-slate-800 hover:text-sky-600 text-sm leading-tight transition-colors">${escapeHtml(h.name)}</a>${h.address ? `<button onclick='copyText(${JSON.stringify(h.address)})' class="text-xs bg-white border border-slate-200 px-2 py-1 rounded text-slate-600 hover:bg-slate-100 ml-2 shrink-0 shadow-sm transition-colors"><i class="fa-regular fa-copy"></i> 地址</button>` : ''}</div>${h.address ? `<div class="grid grid-cols-2 gap-2 text-xs"><a href="${mapsUrl(h.supermarketQuery || ('supermarket near ' + h.name))}" target="_blank" rel="noopener" class="bg-emerald-50 text-emerald-700 border border-emerald-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-emerald-100 transition-colors"><i class="fa-solid fa-cart-shopping mr-1"></i>周邊超市</a><a href="${mapsUrl(h.laundromatQuery || ('laundromat near ' + h.name))}" target="_blank" rel="noopener" class="bg-indigo-50 text-indigo-700 border border-indigo-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-indigo-100 transition-colors"><i class="fa-solid fa-jug-detergent mr-1"></i>自助洗衣</a></div>` : ''}</div>`;
                     }
                 }
+
                 return `<section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
                     <div class="flex justify-between items-end border-b pb-2 border-slate-100">
-                        <span class="text-xl font-black text-sky-600 tracking-tight">DAY ${escapeHtml(day.day)} <span class="text-sm text-slate-400 font-medium ml-1">${escapeHtml(day.dateText)}</span></span>
+                        <span class="text-xl font-black text-sky-600 tracking-tight">DAY ${escapeHtml(day.day)} <span class="text-sm text-slate-400 font-medium ml-1">${escapeHtml(day.dateText || '')}</span></span>
                         <span class="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded font-medium">降雨 <span id="rain-d${escapeHtml(day.day)}" class="font-bold text-slate-700">--</span>% | <span id="temp-d${escapeHtml(day.day)}" class="font-bold text-slate-700">--</span>°C</span>
                     </div>
                     <div class="space-y-4 text-sm mt-3">${eventsHtml}</div>
@@ -234,66 +250,93 @@
 
         function renderChecklist() {
             const container = document.getElementById('checklist-container');
+            const items = Array.isArray(TOUR_DATA.checklist) ? TOUR_DATA.checklist : [];
             const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY_CHECKLIST) || '{}');
-            const groups = Array.isArray(TOUR_DATA.checklist) ? TOUR_DATA.checklist : [];
-            container.innerHTML = groups.map((group, gIndex) => {
-                const items = (group.items || []).map((item, iIndex) => {
+            let html = '';
+
+            items.forEach((group, gIndex) => {
+                html += `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4"><h4 class="font-black text-slate-800 border-b border-slate-100 pb-2 mb-3 text-sm"><i class="fa-solid fa-thumbtack text-sky-500 mr-2"></i>${escapeHtml(group.category)}</h4><div class="space-y-3">`;
+                (group.items || []).forEach((item, iIndex) => {
                     const key = `chk_${gIndex}_${iIndex}`;
                     const checked = Boolean(savedState[key]);
-                    return `<label class="flex items-start gap-3 text-sm cursor-pointer group"><input type="checkbox" id="${key}" ${checked ? 'checked' : ''} onchange="saveChecklist('${key}')" class="mt-0.5 w-5 h-5 text-sky-600 rounded border-slate-300 focus:ring-sky-500 transition-colors cursor-pointer"><span id="label_${key}" class="${checked ? 'line-through text-slate-400' : 'text-slate-700 font-medium'} transition-all duration-200 select-none group-hover:text-sky-700">${escapeHtml(item)}</span></label>`;
-                }).join('');
-                return `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4"><h4 class="font-black text-slate-800 border-b border-slate-100 pb-2 mb-3 text-sm"><i class="fa-solid fa-thumbtack text-sky-500 mr-2"></i>${escapeHtml(group.category)}</h4><div class="space-y-3">${items}</div></div>`;
-            }).join('');
+                    const isChecked = checked ? 'checked' : '';
+                    const textStyle = checked ? 'line-through text-slate-400' : 'text-slate-700 font-medium';
+                    html += `<label class="flex items-start gap-3 text-sm cursor-pointer group"><input type="checkbox" id="${key}" ${isChecked} onchange="saveChecklist('${key}')" class="mt-0.5 w-5 h-5 text-sky-600 rounded border-slate-300 focus:ring-sky-500 transition-colors cursor-pointer"><span id="label_${key}" class="${textStyle} transition-all duration-200 select-none group-hover:text-sky-700">${escapeHtml(item)}</span></label>`;
+                });
+                html += `</div></div>`;
+            });
+            container.innerHTML = html;
         }
 
         function renderFlight() {
+            const t = TOUR_DATA.trip;
             const c = TOUR_DATA.contact || {};
-            document.getElementById('contact-container').innerHTML = `<h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-users text-sky-500 mr-2"></i>聯絡資訊</h3><ul class="text-sm space-y-3 mt-3"><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">團號</span><span class="font-bold">${escapeHtml(TOUR_DATA.trip.groupNo)}</span></li><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">領隊</span><span class="font-bold">${escapeHtml(c.leader || TOUR_DATA.trip.leader || '')}</span></li><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">緊急電話</span><a href="tel:${escapeHtml(c.emergencyPhone)}" class="text-sky-600 font-black">${escapeHtml(c.emergencyPhone)}</a></li><li class="flex justify-between"><span class="text-slate-500">旅行社</span><span class="font-bold">${escapeHtml(c.agency || '')} (${escapeHtml(c.agencyPhone || '')})</span></li></ul>`;
-            const flights = TOUR_DATA.flights || [];
-            document.getElementById('flight-container').innerHTML = `<h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-plane-up text-sky-500 mr-2"></i>航班明細</h3><div class="space-y-4 mt-4 text-sm">${flights.map((f, i) => `<div class="relative pl-4 border-l-2 ${i === flights.length - 1 ? 'border-transparent' : 'border-slate-200'}"><div class="absolute w-3 h-3 ${i === 0 ? 'bg-sky-500' : 'bg-slate-400'} rounded-full -left-[7px] top-1 border-2 border-white"></div><p class="font-bold text-slate-800 text-base">${escapeHtml(f.type)} ${escapeHtml(f.flight)}</p><p class="text-xs text-slate-500 mt-1">${escapeHtml(f.meeting ? f.dateText + ' ' + f.meeting : f.dateText)}</p><p class="text-sm font-black ${i === 0 ? 'text-sky-700' : 'text-slate-700'} mt-1">起飛 ${escapeHtml(f.departure)} ➔ 抵達 ${escapeHtml(f.arrival)}</p></div>`).join('')}</div>`;
+            document.getElementById('contact-group').textContent = t.groupNo || '-';
+            document.getElementById('contact-leader').textContent = c.leader || t.leader || '-';
+            const phone = document.getElementById('contact-phone');
+            phone.textContent = c.emergencyPhone || '-';
+            phone.href = c.emergencyPhone ? `tel:${String(c.emergencyPhone).replace(/\D/g, '')}` : '#';
+            document.getElementById('contact-agency').textContent = `${c.agency || '-'}${c.agencyPhone ? ' (' + c.agencyPhone + ')' : ''}`;
+
+            const flights = Array.isArray(TOUR_DATA.flights) ? TOUR_DATA.flights : [];
+            document.getElementById('contact-container').innerHTML = `<h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-users text-sky-500 mr-2"></i>聯絡資訊</h3><ul class="text-sm space-y-3 mt-3"><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">團號</span><span class="font-bold">${escapeHtml(t.groupNo || '-')}</span></li><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">領隊</span><span class="font-bold">${escapeHtml(c.leader || t.leader || '-')}</span></li><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">緊急電話</span><a href="${phone.href}" class="text-sky-600 font-black">${escapeHtml(c.emergencyPhone || '-')}</a></li><li class="flex justify-between"><span class="text-slate-500">旅行社</span><span class="font-bold">${escapeHtml(c.agency || '-')} ${c.agencyPhone ? '(' + escapeHtml(c.agencyPhone) + ')' : ''}</span></li></ul>`;
+            document.getElementById('flight-container').innerHTML = `<h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-plane-up text-sky-500 mr-2"></i>航班明細</h3><div id="flight-list" class="space-y-4 mt-4 text-sm">${flights.map((f, index) => `<div class="relative pl-4 ${index === flights.length - 1 ? 'border-transparent' : 'border-l-2 border-slate-200'}"><div class="absolute w-3 h-3 ${index === 0 ? 'bg-sky-500' : 'bg-slate-400'} rounded-full -left-[7px] top-1 border-2 border-white"></div><p class="font-bold text-slate-800 text-base">${escapeHtml(f.type || '')} ${escapeHtml(f.flight || '')}</p><p class="text-xs text-slate-500 mt-1">${escapeHtml(f.dateText || '')}${f.meeting ? ' ' + escapeHtml(f.meeting) : ''}</p><p class="text-sm font-black ${index === 0 ? 'text-sky-700' : 'text-slate-700'} mt-1">起飛 ${escapeHtml(f.departure || '--')} ➔ 抵達 ${escapeHtml(f.arrival || '--')}</p></div>`).join('')}</div>`;
         }
 
         function renderTools() {
             const tools = TOUR_DATA.tools || {};
-            const rate = Number(TOUR_DATA.trip.exchangeRate || 0);
-            document.getElementById('tool-vjw').innerHTML = `<div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200"><h3 class="font-bold border-b border-slate-100 pb-2 text-slate-800 mb-3"><i class="fa-solid fa-link text-sky-500 mr-2"></i>線上入境申報</h3><a href="${escapeHtml(tools.vjwUrl || '#')}" target="_blank" rel="noopener" class="bg-blue-600 text-white text-center py-2.5 px-4 rounded-xl font-bold shadow-md flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"><i class="fa-solid fa-passport"></i>Visit Japan Web (點此進入)</a><p class="text-xs text-slate-400 text-center mt-2">${escapeHtml(tools.vjwNote || '')}</p></div>`;
+            const vjw = document.getElementById('tool-vjw');
+            vjw.innerHTML = `<div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200"><h3 class="font-bold border-b border-slate-100 pb-2 text-slate-800 mb-3"><i class="fa-solid fa-link text-sky-500 mr-2"></i>線上入境申報</h3><a href="${escapeHtml(tools.vjwUrl || '#')}" target="_blank" rel="noopener" class="bg-blue-600 text-white text-center py-2.5 px-4 rounded-xl font-bold shadow-md flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"><i class="fa-solid fa-passport"></i> Visit Japan Web (點此進入)</a><p class="text-xs text-slate-400 text-center mt-2">${escapeHtml(tools.vjwNote || '')}</p></div>`;
+
+            const rate = Number(TOUR_DATA?.trip?.exchangeRate || 0);
             document.getElementById('tool-currency').innerHTML = `<div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200"><h3 class="font-bold border-b border-slate-100 pb-2 text-slate-800 mb-3"><i class="fa-solid fa-calculator text-sky-500 mr-2"></i>日幣概算 (匯率 ${rate})</h3><div class="flex items-center gap-2 text-sm bg-slate-50 p-3 rounded-xl border border-slate-100"><input type="number" id="jpy-input" placeholder="輸入日幣 ¥" oninput="convertCurrency()" class="w-1/2 p-2.5 border rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 font-bold bg-white"><span class="text-lg font-black text-slate-400 mx-1">➔</span><span id="twd-output" class="text-lg font-black text-emerald-600 flex-1 text-right">0 NTD</span></div></div>`;
-            document.getElementById('tool-manners').innerHTML = `<div class="bg-blue-50 rounded-2xl p-4 shadow-sm border border-blue-200"><h3 class="font-bold border-b border-blue-200 pb-2 text-blue-900 mb-2"><i class="fa-solid fa-utensils mr-2"></i>日本飲食與風俗禮儀</h3><ul class="text-xs space-y-2 text-blue-800 leading-relaxed">${(tools.manners || []).map(x => `<li><i class="fa-solid fa-check text-blue-500 mr-1"></i><b>${escapeHtml(x[0])}</b>${escapeHtml(x[1])}</li>`).join('')}</ul></div>`;
-            document.getElementById('tool-local').innerHTML = `<div class="bg-amber-50 rounded-2xl p-4 shadow-sm border border-amber-200"><h3 class="font-bold border-b border-amber-200 pb-2 text-amber-900 mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i>當地生活與法規注意</h3><ul class="text-xs space-y-2 text-amber-800 leading-relaxed">${(tools.local || []).map((x, i) => `<li${i === 3 ? ' class="font-bold text-red-600 mt-2"' : ''}><i class="fa-solid ${i === 3 ? 'fa-shield-virus' : 'fa-check'} text-amber-600 mr-1"></i><b>${escapeHtml(x[0])}</b>${escapeHtml(x[1])}</li>`).join('')}</ul></div>`;
-            document.getElementById('tool-emergency').innerHTML = `<div class="bg-red-50 rounded-2xl p-4 shadow-sm border border-red-200"><h3 class="font-bold border-b border-red-200 pb-2 text-red-900 mb-2"><i class="fa-solid fa-truck-medical mr-2"></i>緊急求助聯絡</h3><ul class="text-xs space-y-2 text-red-800">${(tools.emergency || []).map((x, i) => `<li><b>${escapeHtml(x.split('：')[0] || '')}：</b>${escapeHtml(x.includes('：') ? x.split('：').slice(1).join('：') : x)}</li>`).join('')}</ul></div>`;
+
+            const manners = (tools.manners || []).map(item => `<li><i class="fa-solid fa-check text-blue-500 mr-1"></i><b>${escapeHtml(item[0] || '')}</b>${escapeHtml(item[1] || '')}</li>`).join('');
+            document.getElementById('tool-manners').innerHTML = `<div class="bg-blue-50 rounded-2xl p-4 shadow-sm border border-blue-200"><h3 class="font-bold border-b border-blue-200 pb-2 text-blue-900 mb-2"><i class="fa-solid fa-utensils mr-2"></i>日本飲食與風俗禮儀</h3><ul class="text-xs space-y-2 text-blue-800 leading-relaxed">${manners}</ul></div>`;
+
+            const local = (tools.local || []).map(item => `<li><i class="fa-solid fa-circle-info text-amber-600 mr-1"></i><b>${escapeHtml(item[0] || '')}</b>${escapeHtml(item[1] || '')}</li>`).join('');
+            document.getElementById('tool-local').innerHTML = `<div class="bg-amber-50 rounded-2xl p-4 shadow-sm border border-amber-200"><h3 class="font-bold border-b border-amber-200 pb-2 text-amber-900 mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i>當地生活與法規注意</h3><ul class="text-xs space-y-2 text-amber-800 leading-relaxed">${local}</ul></div>`;
+
+            const emergency = (tools.emergency || []).map((text) => `<li>${escapeHtml(text)}</li>`).join('');
+            document.getElementById('tool-emergency').innerHTML = `<div class="bg-red-50 rounded-2xl p-4 shadow-sm border border-red-200"><h3 class="font-bold border-b border-red-200 pb-2 text-red-900 mb-2"><i class="fa-solid fa-truck-medical mr-2"></i>緊急求助聯絡</h3><ul class="text-xs space-y-2 text-red-800">${emergency}</ul></div>`;
         }
 
-        function switchTab(tabName) {
-            const tabs = ['itinerary', 'checklist', 'flight', 'tools'];
-            tabs.forEach(tab => {
-                const content = document.getElementById('tab-' + tab);
-                const btn = document.getElementById('btn-' + tab);
-                if (tab === tabName) { content.classList.remove('hidden'); btn.classList.add('tab-active'); btn.classList.remove('text-slate-500'); }
-                else { content.classList.add('hidden'); btn.classList.remove('tab-active'); btn.classList.add('text-slate-500'); }
-            });
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+        function saveChecklist(key) {
+            const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY_CHECKLIST) || '{}');
+            const checkbox = document.getElementById(key);
+            if (!checkbox) return;
+            savedState[key] = checkbox.checked;
+            localStorage.setItem(STORAGE_KEY_CHECKLIST, JSON.stringify(savedState));
+
+            const label = document.getElementById(`label_${key}`);
+            if (!label) return;
+            if (checkbox.checked) {
+                label.classList.add('line-through', 'text-slate-400');
+                label.classList.remove('text-slate-700', 'font-medium', 'group-hover:text-sky-700');
+            } else {
+                label.classList.remove('line-through', 'text-slate-400');
+                label.classList.add('text-slate-700', 'font-medium', 'group-hover:text-sky-700');
+            }
         }
 
         function toggleRoomList() {
             const container = document.getElementById('room-list-container');
             const icon = document.getElementById('room-toggle-icon');
-            const hidden = container.classList.contains('hidden');
-            container.classList.toggle('hidden');
-            icon.style.transform = hidden ? 'rotate(180deg)' : 'rotate(0deg)';
-        }
-
-        function saveChecklist(key) {
-            const state = JSON.parse(localStorage.getItem(STORAGE_KEY_CHECKLIST) || '{}');
-            const checked = document.getElementById(key).checked;
-            state[key] = checked;
-            localStorage.setItem(STORAGE_KEY_CHECKLIST, JSON.stringify(state));
-            const label = document.getElementById(`label_${key}`);
-            if (checked) { label.classList.add('line-through', 'text-slate-400'); label.classList.remove('text-slate-700', 'font-medium', 'group-hover:text-sky-700'); }
-            else { label.classList.remove('line-through', 'text-slate-400'); label.classList.add('text-slate-700', 'font-medium', 'group-hover:text-sky-700'); }
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                container.classList.add('hidden');
+                icon.style.transform = 'rotate(0deg)';
+            }
         }
 
         function copyText(text) {
-            navigator.clipboard.writeText(text).then(() => alert('已成功複製地址：\n' + text)).catch(() => alert('複製失敗，請手動選取複製。'));
+            navigator.clipboard.writeText(text).then(() => {
+                alert('已成功複製地址：\n' + text);
+            }).catch(() => {
+                alert('複製失敗，請手動選取複製。');
+            });
         }
 
         function convertCurrency() {
@@ -330,35 +373,49 @@
         async function refreshRoomsNow() {
             const container = document.getElementById('room-list-container');
             const old = container.innerHTML;
-            container.innerHTML = '<p class="text-xs text-slate-400 text-center py-3"><i class="fa-solid fa-spinner fa-spin mr-1"></i>讀取 GitHub 房號...</p>';
             try {
                 roomsSourceText = await fetchText(ROOMS_URL);
                 ROOMS_DATA = parseRooms(roomsSourceText);
                 renderRooms();
             } catch (e) {
                 container.innerHTML = old || '<p class="text-xs text-red-500 text-center py-3">房號資料讀取失敗，請稍後重試。</p>';
+                console.error('rooms.txt 載入失敗：', e);
             }
         }
 
         function deriveGithubEditUrl() {
-            if (GITHUB_EDIT_URL) return GITHUB_EDIT_URL;
+            // GitHub Pages 標準網址：https://OWNER.github.io/REPO/
             const host = location.hostname;
-            const path = location.pathname;
+            const pathParts = location.pathname.split('/').filter(Boolean);
             const match = host.match(/^(.+)\.github\.io$/i);
             if (!match) return '';
+
             const owner = match[1];
-            const repo = path.split('/').filter(Boolean)[0] || `${owner}.github.io`;
-            const branchPath = `edit/main/data/rooms.txt`;
-            return `https://github.com/${owner}/${repo}/${branchPath}`;
+            const repo = pathParts[0] || `${owner}.github.io`;
+            return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/edit/main/data/rooms.txt`;
         }
 
         function openGuideEdit() {
-            const url = deriveGithubEditUrl();
-            if (url) {
-                window.open(url, '_blank', 'noopener');
+            const expected = String(ROOMS_DATA.guidePassword || '').trim();
+            if (!expected) {
+                alert('目前 rooms.txt 沒有設定導遊密碼。');
                 return;
             }
-            alert('請先在 index.html 的 GITHUB_EDIT_URL 填入 GitHub rooms.txt 編輯網址，再使用此按鈕。');
+
+            const password = window.prompt('請輸入導遊修改密碼：');
+            if (password === null) return;
+            if (password.trim() !== expected) {
+                alert('導遊密碼不正確，目前僅可查閱房號。');
+                return;
+            }
+
+            const url = deriveGithubEditUrl();
+            if (!url) {
+                alert('此頁目前不是標準 GitHub Pages 網址，無法自動產生 rooms.txt 編輯頁。請直接到 GitHub Repository → data → rooms.txt → 編輯。');
+                return;
+            }
+
+            window.open(url, '_blank', 'noopener');
         }
 
         async function bootstrap() {
