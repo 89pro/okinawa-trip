@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>夏日沖繩經典四日遊行程手冊</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .tab-active { border-bottom: 3px solid #0284c7; color: #0284c7; font-weight: bold; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .timeline-border { border-left: 2px solid #38bdf8; padding-left: 0.75rem; position: relative; }
+        .timeline-border::before {
+            content: ''; position: absolute; left: -5px; top: 0.25rem;
+            width: 8px; height: 8px; border-radius: 50%; background: #0284c7;
+        }
+        .sync-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: #94a3b8; }
+        .sync-dot.ok { background: #10b981; }
+        .sync-dot.busy { background: #f59e0b; }
+        .sync-dot.error { background: #ef4444; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 pb-20 max-w-md mx-auto shadow-2xl min-h-screen relative overflow-x-hidden">
+
+    <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-4 sticky top-0 z-50 shadow-md">
+        <div class="flex justify-between items-center mb-1">
+            <span id="group-badge" class="bg-orange-500 text-xs px-2 py-0.5 rounded-full font-bold shadow-sm">團號：-</span>
+            <span id="airline-badge" class="text-xs opacity-90 font-medium"><i class="fa-solid fa-plane"></i> -</span>
+        </div>
+        <h1 id="trip-title" class="text-xl font-black tracking-wide mt-1">旅遊行程手冊</h1>
+        <p id="trip-subtitle" class="text-xs text-sky-100 mt-1 opacity-90">資料載入中...</p>
+    </header>
+
+    <nav class="flex bg-white shadow-sm border-b sticky top-[76px] z-40 text-center text-xs font-medium">
+        <button onclick="switchTab('itinerary')" id="btn-itinerary" class="flex-1 py-3 tab-active flex flex-col items-center gap-1 transition-colors"><i class="fa-solid fa-calendar-day text-sm"></i>每日行程</button>
+        <button onclick="switchTab('checklist')" id="btn-checklist" class="flex-1 py-3 text-slate-500 flex flex-col items-center gap-1 transition-colors"><i class="fa-solid fa-list-check text-sm"></i>行前準備</button>
+        <button onclick="switchTab('flight')" id="btn-flight" class="flex-1 py-3 text-slate-500 flex flex-col items-center gap-1 transition-colors"><i class="fa-solid fa-plane-departure text-sm"></i>航班集合</button>
+        <button onclick="switchTab('tools')" id="btn-tools" class="flex-1 py-3 text-slate-500 flex flex-col items-center gap-1 transition-colors"><i class="fa-solid fa-toolbox text-sm"></i>工具須知</button>
+    </nav>
+
+    <main id="tab-itinerary" class="p-4 space-y-5 animate-fade-in">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <button onclick="toggleRoomList()" class="w-full p-3 flex justify-between items-center bg-sky-50 text-sky-800 font-bold text-sm hover:bg-sky-100 transition-colors">
+                <span><i class="fa-solid fa-bed mr-2"></i>團員房號分配表</span>
+                <i class="fa-solid fa-chevron-down transition-transform duration-300" id="room-toggle-icon"></i>
+            </button>
+            <div id="room-list-container" class="hidden p-3 max-h-80 overflow-y-auto space-y-2 bg-white"></div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-3 flex justify-between items-center text-xs shadow-sm">
+            <div>
+                <p class="font-bold text-slate-800"><i class="fa-solid fa-cloud-sun-rain text-sky-500 mr-1"></i><span id="weather-title">即時天氣預報</span></p>
+                <p class="text-slate-500 mt-1" id="weather-info">連接氣象資料中...</p>
+            </div>
+            <button onclick="fetchWeather()" class="bg-sky-50 text-sky-700 border border-sky-200 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-sky-100 transition-colors"><i class="fa-solid fa-rotate-right mr-1"></i>更新</button>
+        </div>
+
+        <div id="itinerary-container" class="space-y-5"></div>
+    </main>
+
+    <main id="tab-checklist" class="p-4 space-y-4 hidden animate-fade-in">
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-indigo-800 text-xs shadow-sm font-medium">
+            <p><i class="fa-solid fa-circle-info mr-1"></i>點擊項目可打勾，系統會將進度保存在您的手機內，無須網路也能查看。</p>
+        </div>
+        <div id="checklist-container" class="space-y-4"></div>
+    </main>
+
+    <main id="tab-flight" class="p-4 space-y-4 hidden animate-fade-in">
+        <div id="contact-container" class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200"></div>
+        <div id="flight-container" class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200"></div>
+    </main>
+
+    <main id="tab-tools" class="p-4 space-y-4 hidden animate-fade-in">
+        <div id="tool-vjw"></div>
+        <div id="tool-currency"></div>
+        <div id="tool-manners"></div>
+        <div id="tool-local"></div>
+        <div id="tool-emergency"></div>
+    </main>
+
+    <script>
+        /* ============================================================
+         * 旅遊框架：資料與視圖分離
+         * ------------------------------------------------------------
+         * 只需修改 /data/tour.json 與 /data/rooms.txt，即可重複利用同一套 UI。
+         * 本 HTML 不保存共同房號；房號一律從 GitHub 讀取。
+         * ============================================================ */
+        const DATA_URL = './data/tour.json';
+        const ROOMS_URL = './data/rooms.txt';
+        const REFRESH_MS = 15000;
+        const STORAGE_KEY_CHECKLIST = 'tour_26091304D_checklist';
+
+        /* 導遊僅需在 GitHub 編輯 rooms.txt；此連結由目前頁面推導，無須 API Token。 */
+        const GITHUB_EDIT_URL = ''; // 例：https://github.com/帳號/Repository/edit/main/data/rooms.txt
+
+        let TOUR_DATA = null;
+        let ROOMS_DATA = { members: [], guidePassword: '' };
+        let roomsSourceText = '';
+        let refreshTimer = null;
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function mapsUrl(query) {
+            return 'https://maps.google.com/?q=' + encodeURIComponent(String(query || ''));
+        }
+
+        async function fetchText(url) {
+            const response = await fetch(url + '?t=' + Date.now(), { cache: 'no-store' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.text();
+        }
+
+        async function loadTourData() {
+            const response = await fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' });
+            if (!response.ok) throw new Error(`tour.json HTTP ${response.status}`);
+            TOUR_DATA = await response.json();
+        }
+
+        function parseRooms(text) {
+            const result = { members: [], guidePassword: '' };
+            for (const rawLine of String(text || '').split(/\r?\n/)) {
+                const line = rawLine.trim();
+                if (!line) continue;
+                if (line.startsWith('#')) {
+                    const m = line.match(/^#\s*GUIDE_PASSWORD\s*=\s*(.*)\s*$/i);
+                    if (m) result.guidePassword = m[1];
+                    continue;
+                }
+                const parts = line.split('|');
+                if (parts.length >= 3 && /^\d+$/.test(parts[0].trim())) {
+                    result.members.push({
+                        id: Number(parts[0].trim()),
+                        name: parts[1].trim(),
+                        room: parts.slice(2).join('|').trim()
+                    });
+                }
+            }
+            return result;
+        }
+
+        function roomsMap() {
+            return new Map(ROOMS_DATA.members.map(m => [m.id, m.room]));
+        }
+
+        function normalizeMembers() {
+            const dataMembers = Array.isArray(TOUR_DATA?.members) ? TOUR_DATA.members : [];
+            const parsed = new Map(ROOMS_DATA.members.map(m => [m.id, m]));
+            return dataMembers.map(m => ({ ...m, room: parsed.get(Number(m.id))?.room || '' }));
+        }
+
+        function renderMeta() {
+            const t = TOUR_DATA.trip;
+            document.getElementById('group-badge').textContent = '團號：' + (t.groupNo || '-');
+            document.getElementById('airline-badge').innerHTML = '<i class="fa-solid fa-plane"></i> ' + escapeHtml(t.airline || '-');
+            document.getElementById('trip-title').textContent = t.title || '旅遊行程手冊';
+            document.getElementById('trip-subtitle').textContent = `${t.dateText || ''}${t.leader ? ' | 領隊：' + t.leader : ''}`;
+            document.getElementById('weather-title').textContent = `${t.weather?.locationName || '當地'}即時天氣預報`;
+        }
+
+        function renderRooms() {
+            const container = document.getElementById('room-list-container');
+            const members = normalizeMembers();
+            if (!members.length) {
+                container.innerHTML = '<p class="text-xs text-slate-400 text-center py-3">目前沒有團員資料。</p>';
+                return;
+            }
+            let html = '';
+            members.forEach(member => {
+                html += `
+                    <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
+                        <span class="w-28 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2 truncate">${escapeHtml(member.name)}</span>
+                        <span class="flex-1 p-1.5 border border-slate-200 bg-slate-50 rounded-md text-sm font-bold text-slate-700 min-h-[34px] flex items-center">
+                            ${member.room ? escapeHtml(member.room) : '<span class="text-slate-300 font-normal">尚未填寫</span>'}
+                        </span>
+                    </div>`;
+            });
+            html += `
+                <div class="pt-2 mt-1 border-t border-slate-100 text-[11px] text-slate-400 leading-relaxed">
+                    <div class="flex items-center gap-1"><span class="sync-dot ok"></span>房號資料：GitHub 共用檔案</div>
+                    <div class="mt-1">最後同步：${new Date().toLocaleTimeString('zh-TW', { hour12: false })}</div>
+                    <div class="mt-2 flex gap-2">
+                        <button onclick="refreshRoomsNow()" class="flex-1 bg-slate-50 border border-slate-200 text-slate-600 py-1.5 rounded-lg font-bold hover:bg-slate-100"><i class="fa-solid fa-rotate mr-1"></i>重新讀取</button>
+                        <button onclick="openGuideEdit()" class="flex-1 bg-sky-50 border border-sky-200 text-sky-700 py-1.5 rounded-lg font-bold hover:bg-sky-100"><i class="fa-brands fa-github mr-1"></i>導遊修改</button>
+                    </div>
+                </div>`;
+            container.innerHTML = html;
+        }
+
+        function renderItinerary() {
+            const container = document.getElementById('itinerary-container');
+            const days = Array.isArray(TOUR_DATA.itinerary) ? TOUR_DATA.itinerary : [];
+            container.innerHTML = days.map(day => {
+                const events = Array.isArray(day.events) ? day.events : [];
+                const eventsHtml = events.map(event => {
+                    const tag = event.tag ? `<span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs mr-1">${escapeHtml(event.tag)}</span>` : '';
+                    const titleHtml = event.mapQuery
+                        ? `<a href="${mapsUrl(event.mapQuery)}" target="_blank" rel="noopener" class="font-bold text-sky-600 hover:text-sky-800 transition-colors block"><i class="fa-solid fa-location-dot mr-1"></i>${escapeHtml(event.title)}</a>`
+                        : `<p class="font-bold text-slate-800">${tag}${escapeHtml(event.title)}</p>`;
+                    const titleWithTag = event.mapQuery && event.tag ? `<div class="font-bold text-slate-800 mt-1">${tag}</div>${titleHtml}` : titleHtml;
+                    const detail = event.detail ? `<p class="font-bold text-slate-800 mt-1">${escapeHtml(event.detail)}</p>` : '';
+                    const description = event.description ? `<p class="text-xs text-slate-500 mt-1 leading-relaxed">${escapeHtml(event.description)}</p>` : '';
+                    const warning = event.warning ? `<p class="text-xs text-red-600 font-bold mt-1">※ 提醒：${escapeHtml(event.warning)}</p>` : '';
+                    return `<div class="timeline-border ${event.last ? 'border-transparent' : ''}">
+                        <p class="text-xs text-slate-400 font-medium mb-0.5">${escapeHtml(event.time)}</p>
+                        ${titleWithTag}${detail}${warning}${description}
+                    </div>`;
+                }).join('');
+                const h = day.hotel;
+                let hotelHtml = '';
+                if (h) {
+                    if (day.day === 3 && h.note) {
+                        hotelHtml = `<div class="mt-2 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center justify-between"><div><p class="text-xs text-slate-400 font-bold mb-1"><i class="fa-solid fa-hotel mr-1"></i>今夜住宿</p><p class="font-bold text-slate-800 text-sm">${escapeHtml(h.name)} <span class="text-xs font-normal text-slate-500 ml-1">(${escapeHtml(h.note)})</span></p></div></div>`;
+                    } else if (h.name) {
+                        hotelHtml = `<div class="mt-2 pt-3 border-t border-slate-100 bg-slate-50 p-3 rounded-xl border border-slate-100"><p class="text-xs text-slate-400 font-bold mb-1.5"><i class="fa-solid fa-hotel mr-1"></i>今夜住宿</p><div class="flex justify-between items-start mb-2"><a href="${mapsUrl(h.mapQuery || h.name)}" target="_blank" rel="noopener" class="font-bold text-slate-800 hover:text-sky-600 text-sm leading-tight transition-colors">${escapeHtml(h.name)}</a>${h.address ? `<button onclick='copyText(${JSON.stringify(h.address)})' class="text-xs bg-white border border-slate-200 px-2 py-1 rounded text-slate-600 hover:bg-slate-100 ml-2 shrink-0 shadow-sm transition-colors"><i class="fa-regular fa-copy"></i> 地址</button>` : ''}</div>${h.address ? `<div class="grid grid-cols-2 gap-2 text-xs"><a href="${mapsUrl(h.supermarketQuery || ('supermarket near ' + h.name))}" target="_blank" rel="noopener" class="bg-emerald-50 text-emerald-700 border border-emerald-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-emerald-100 transition-colors"><i class="fa-solid fa-cart-shopping mr-1"></i>周邊超市</a><a href="${mapsUrl(h.laundromatQuery || ('laundromat near ' + h.name))}" target="_blank" rel="noopener" class="bg-indigo-50 text-indigo-700 border border-indigo-200 py-1.5 px-2 rounded-lg text-center font-bold hover:bg-indigo-100 transition-colors"><i class="fa-solid fa-jug-detergent mr-1"></i>自助洗衣</a></div>` : ''}</div>`;
+                    }
+                }
+                return `<section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
+                    <div class="flex justify-between items-end border-b pb-2 border-slate-100">
+                        <span class="text-xl font-black text-sky-600 tracking-tight">DAY ${escapeHtml(day.day)} <span class="text-sm text-slate-400 font-medium ml-1">${escapeHtml(day.dateText)}</span></span>
+                        <span class="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded font-medium">降雨 <span id="rain-d${escapeHtml(day.day)}" class="font-bold text-slate-700">--</span>% | <span id="temp-d${escapeHtml(day.day)}" class="font-bold text-slate-700">--</span>°C</span>
+                    </div>
+                    <div class="space-y-4 text-sm mt-3">${eventsHtml}</div>
+                    ${hotelHtml}
+                </section>`;
+            }).join('');
+        }
+
+        function renderChecklist() {
+            const container = document.getElementById('checklist-container');
+            const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY_CHECKLIST) || '{}');
+            const groups = Array.isArray(TOUR_DATA.checklist) ? TOUR_DATA.checklist : [];
+            container.innerHTML = groups.map((group, gIndex) => {
+                const items = (group.items || []).map((item, iIndex) => {
+                    const key = `chk_${gIndex}_${iIndex}`;
+                    const checked = Boolean(savedState[key]);
+                    return `<label class="flex items-start gap-3 text-sm cursor-pointer group"><input type="checkbox" id="${key}" ${checked ? 'checked' : ''} onchange="saveChecklist('${key}')" class="mt-0.5 w-5 h-5 text-sky-600 rounded border-slate-300 focus:ring-sky-500 transition-colors cursor-pointer"><span id="label_${key}" class="${checked ? 'line-through text-slate-400' : 'text-slate-700 font-medium'} transition-all duration-200 select-none group-hover:text-sky-700">${escapeHtml(item)}</span></label>`;
+                }).join('');
+                return `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4"><h4 class="font-black text-slate-800 border-b border-slate-100 pb-2 mb-3 text-sm"><i class="fa-solid fa-thumbtack text-sky-500 mr-2"></i>${escapeHtml(group.category)}</h4><div class="space-y-3">${items}</div></div>`;
+            }).join('');
+        }
+
+        function renderFlight() {
+            const c = TOUR_DATA.contact || {};
+            document.getElementById('contact-container').innerHTML = `<h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-users text-sky-500 mr-2"></i>聯絡資訊</h3><ul class="text-sm space-y-3 mt-3"><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">團號</span><span class="font-bold">${escapeHtml(TOUR_DATA.trip.groupNo)}</span></li><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">領隊</span><span class="font-bold">${escapeHtml(c.leader || TOUR_DATA.trip.leader || '')}</span></li><li class="flex justify-between border-b border-slate-50 pb-2"><span class="text-slate-500">緊急電話</span><a href="tel:${escapeHtml(c.emergencyPhone)}" class="text-sky-600 font-black">${escapeHtml(c.emergencyPhone)}</a></li><li class="flex justify-between"><span class="text-slate-500">旅行社</span><span class="font-bold">${escapeHtml(c.agency || '')} (${escapeHtml(c.agencyPhone || '')})</span></li></ul>`;
+            const flights = TOUR_DATA.flights || [];
+            document.getElementById('flight-container').innerHTML = `<h3 class="font-bold border-b pb-2 text-slate-800"><i class="fa-solid fa-plane-up text-sky-500 mr-2"></i>航班明細</h3><div class="space-y-4 mt-4 text-sm">${flights.map((f, i) => `<div class="relative pl-4 border-l-2 ${i === flights.length - 1 ? 'border-transparent' : 'border-slate-200'}"><div class="absolute w-3 h-3 ${i === 0 ? 'bg-sky-500' : 'bg-slate-400'} rounded-full -left-[7px] top-1 border-2 border-white"></div><p class="font-bold text-slate-800 text-base">${escapeHtml(f.type)} ${escapeHtml(f.flight)}</p><p class="text-xs text-slate-500 mt-1">${escapeHtml(f.meeting ? f.dateText + ' ' + f.meeting : f.dateText)}</p><p class="text-sm font-black ${i === 0 ? 'text-sky-700' : 'text-slate-700'} mt-1">起飛 ${escapeHtml(f.departure)} ➔ 抵達 ${escapeHtml(f.arrival)}</p></div>`).join('')}</div>`;
+        }
+
+        function renderTools() {
+            const tools = TOUR_DATA.tools || {};
+            const rate = Number(TOUR_DATA.trip.exchangeRate || 0);
+            document.getElementById('tool-vjw').innerHTML = `<div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200"><h3 class="font-bold border-b border-slate-100 pb-2 text-slate-800 mb-3"><i class="fa-solid fa-link text-sky-500 mr-2"></i>線上入境申報</h3><a href="${escapeHtml(tools.vjwUrl || '#')}" target="_blank" rel="noopener" class="bg-blue-600 text-white text-center py-2.5 px-4 rounded-xl font-bold shadow-md flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"><i class="fa-solid fa-passport"></i>Visit Japan Web (點此進入)</a><p class="text-xs text-slate-400 text-center mt-2">${escapeHtml(tools.vjwNote || '')}</p></div>`;
+            document.getElementById('tool-currency').innerHTML = `<div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200"><h3 class="font-bold border-b border-slate-100 pb-2 text-slate-800 mb-3"><i class="fa-solid fa-calculator text-sky-500 mr-2"></i>日幣概算 (匯率 ${rate})</h3><div class="flex items-center gap-2 text-sm bg-slate-50 p-3 rounded-xl border border-slate-100"><input type="number" id="jpy-input" placeholder="輸入日幣 ¥" oninput="convertCurrency()" class="w-1/2 p-2.5 border rounded-lg focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 font-bold bg-white"><span class="text-lg font-black text-slate-400 mx-1">➔</span><span id="twd-output" class="text-lg font-black text-emerald-600 flex-1 text-right">0 NTD</span></div></div>`;
+            document.getElementById('tool-manners').innerHTML = `<div class="bg-blue-50 rounded-2xl p-4 shadow-sm border border-blue-200"><h3 class="font-bold border-b border-blue-200 pb-2 text-blue-900 mb-2"><i class="fa-solid fa-utensils mr-2"></i>日本飲食與風俗禮儀</h3><ul class="text-xs space-y-2 text-blue-800 leading-relaxed">${(tools.manners || []).map(x => `<li><i class="fa-solid fa-check text-blue-500 mr-1"></i><b>${escapeHtml(x[0])}</b>${escapeHtml(x[1])}</li>`).join('')}</ul></div>`;
+            document.getElementById('tool-local').innerHTML = `<div class="bg-amber-50 rounded-2xl p-4 shadow-sm border border-amber-200"><h3 class="font-bold border-b border-amber-200 pb-2 text-amber-900 mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i>當地生活與法規注意</h3><ul class="text-xs space-y-2 text-amber-800 leading-relaxed">${(tools.local || []).map((x, i) => `<li${i === 3 ? ' class="font-bold text-red-600 mt-2"' : ''}><i class="fa-solid ${i === 3 ? 'fa-shield-virus' : 'fa-check'} text-amber-600 mr-1"></i><b>${escapeHtml(x[0])}</b>${escapeHtml(x[1])}</li>`).join('')}</ul></div>`;
+            document.getElementById('tool-emergency').innerHTML = `<div class="bg-red-50 rounded-2xl p-4 shadow-sm border border-red-200"><h3 class="font-bold border-b border-red-200 pb-2 text-red-900 mb-2"><i class="fa-solid fa-truck-medical mr-2"></i>緊急求助聯絡</h3><ul class="text-xs space-y-2 text-red-800">${(tools.emergency || []).map((x, i) => `<li><b>${escapeHtml(x.split('：')[0] || '')}：</b>${escapeHtml(x.includes('：') ? x.split('：').slice(1).join('：') : x)}</li>`).join('')}</ul></div>`;
+        }
+
+        function switchTab(tabName) {
+            const tabs = ['itinerary', 'checklist', 'flight', 'tools'];
+            tabs.forEach(tab => {
+                const content = document.getElementById('tab-' + tab);
+                const btn = document.getElementById('btn-' + tab);
+                if (tab === tabName) { content.classList.remove('hidden'); btn.classList.add('tab-active'); btn.classList.remove('text-slate-500'); }
+                else { content.classList.add('hidden'); btn.classList.remove('tab-active'); btn.classList.add('text-slate-500'); }
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function toggleRoomList() {
+            const container = document.getElementById('room-list-container');
+            const icon = document.getElementById('room-toggle-icon');
+            const hidden = container.classList.contains('hidden');
+            container.classList.toggle('hidden');
+            icon.style.transform = hidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+
+        function saveChecklist(key) {
+            const state = JSON.parse(localStorage.getItem(STORAGE_KEY_CHECKLIST) || '{}');
+            const checked = document.getElementById(key).checked;
+            state[key] = checked;
+            localStorage.setItem(STORAGE_KEY_CHECKLIST, JSON.stringify(state));
+            const label = document.getElementById(`label_${key}`);
+            if (checked) { label.classList.add('line-through', 'text-slate-400'); label.classList.remove('text-slate-700', 'font-medium', 'group-hover:text-sky-700'); }
+            else { label.classList.remove('line-through', 'text-slate-400'); label.classList.add('text-slate-700', 'font-medium', 'group-hover:text-sky-700'); }
+        }
+
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => alert('已成功複製地址：\n' + text)).catch(() => alert('複製失敗，請手動選取複製。'));
+        }
+
+        function convertCurrency() {
+            const jpy = Number(document.getElementById('jpy-input').value || 0);
+            const rate = Number(TOUR_DATA?.trip?.exchangeRate || 0);
+            document.getElementById('twd-output').innerText = Math.round(jpy * rate).toLocaleString() + ' NTD';
+        }
+
+        async function fetchWeather() {
+            if (!TOUR_DATA?.trip?.weather) return;
+            const infoLabel = document.getElementById('weather-info');
+            infoLabel.innerText = '資料同步中...';
+            const w = TOUR_DATA.trip.weather;
+            try {
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(w.latitude)}&longitude=${encodeURIComponent(w.longitude)}&daily=temperature_2m_max,precipitation_probability_max&timezone=${encodeURIComponent(w.timezone)}`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('weather http ' + res.status);
+                const data = await res.json();
+                const temps = data?.daily?.temperature_2m_max || [];
+                const rains = data?.daily?.precipitation_probability_max || [];
+                infoLabel.innerText = temps.length ? `預測最高溫 ${temps[0]}°C，降雨機率 ${rains[0] ?? '--'}%` : '無可用天氣資料';
+                (TOUR_DATA.itinerary || []).forEach(day => {
+                    const idx = Number(day.day) - 1;
+                    const temp = document.getElementById(`temp-d${day.day}`);
+                    const rain = document.getElementById(`rain-d${day.day}`);
+                    if (temp && temps[idx] !== undefined) temp.innerText = temps[idx];
+                    if (rain && rains[idx] !== undefined) rain.innerText = rains[idx];
+                });
+            } catch (e) {
+                infoLabel.innerText = '無法取得即時資料';
+            }
+        }
+
+        async function refreshRoomsNow() {
+            const container = document.getElementById('room-list-container');
+            const old = container.innerHTML;
+            container.innerHTML = '<p class="text-xs text-slate-400 text-center py-3"><i class="fa-solid fa-spinner fa-spin mr-1"></i>讀取 GitHub 房號...</p>';
+            try {
+                roomsSourceText = await fetchText(ROOMS_URL);
+                ROOMS_DATA = parseRooms(roomsSourceText);
+                renderRooms();
+            } catch (e) {
+                container.innerHTML = old || '<p class="text-xs text-red-500 text-center py-3">房號資料讀取失敗，請稍後重試。</p>';
+            }
+        }
+
+        function deriveGithubEditUrl() {
+            if (GITHUB_EDIT_URL) return GITHUB_EDIT_URL;
+            const host = location.hostname;
+            const path = location.pathname;
+            const match = host.match(/^(.+)\.github\.io$/i);
+            if (!match) return '';
+            const owner = match[1];
+            const repo = path.split('/').filter(Boolean)[0] || `${owner}.github.io`;
+            const branchPath = `edit/main/data/rooms.txt`;
+            return `https://github.com/${owner}/${repo}/${branchPath}`;
+        }
+
+        function openGuideEdit() {
+            const url = deriveGithubEditUrl();
+            if (url) {
+                window.open(url, '_blank', 'noopener');
+                return;
+            }
+            alert('請先在 index.html 的 GITHUB_EDIT_URL 填入 GitHub rooms.txt 編輯網址，再使用此按鈕。');
+        }
+
+        async function bootstrap() {
+            try {
+                await loadTourData();
+                renderMeta();
+                renderItinerary();
+                renderChecklist();
+                renderFlight();
+                renderTools();
+                await refreshRoomsNow();
+                await fetchWeather();
+                refreshTimer = window.setInterval(refreshRoomsNow, REFRESH_MS);
+            } catch (e) {
+                document.getElementById('weather-info').innerText = '旅遊資料載入失敗，請檢查 GitHub data 檔案。';
+                document.getElementById('room-list-container').innerHTML = '<p class="text-xs text-red-500 text-center py-3">共享資料載入失敗。</p>';
+                console.error(e);
+            }
+        }
+
+        window.addEventListener('beforeunload', () => { if (refreshTimer) clearInterval(refreshTimer); });
+        window.addEventListener('load', bootstrap);
+    </script>
+</body>
+</html>
