@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>夏日沖繩經典四日遊行程手冊</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         .tab-active { border-bottom: 3px solid #0284c7; color: #0284c7; font-weight: bold; }
@@ -21,6 +21,8 @@
         .sync-dot.ok { background: #10b981; }
         .sync-dot.busy { background: #f59e0b; }
         .sync-dot.error { background: #ef4444; }
+        .room-edit-panel { display: none; }
+        .room-edit-panel.open { display: block; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 pb-20 max-w-md mx-auto shadow-2xl min-h-screen relative overflow-x-hidden">
@@ -88,11 +90,11 @@
          * 1. /data/tour.json：旅遊內容（航班、行程、住宿、團員、工具）
          * 2. /data/rooms.txt：全團共同房號 + 導遊防誤操作密碼
          * 3. GitHub Pages：所有人查閱
-         * 4. GitHub 本身：只有具有 Repository 寫入權限的導遊可修改 rooms.txt
+         * 4. 純 GitHub：網站只負責讀取與批次整理，真正的修改在 GitHub rooms.txt 由導遊 Commit
          *
          * ============================================================ */
-        const DATA_URL = './data/tour.json';
-        const ROOMS_URL = './data/rooms.txt';
+        const DATA_URL_CANDIDATES = ['data/tour.json', 'tour.json'];
+        const ROOMS_URL_CANDIDATES = ['data/rooms.txt', 'rooms.txt'];
         const REFRESH_MS = 15000;
         const STORAGE_KEY_CHECKLIST = 'tour_26091304D_checklist';
 
@@ -115,21 +117,33 @@
         }
 
         async function fetchText(url) {
-            const response = await fetch(url + '?t=' + Date.now(), {
-                cache: 'no-store',
-                headers: { 'Cache-Control': 'no-cache' }
-            });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const target = new URL(url, document.baseURI);
+            target.searchParams.set('t', String(Date.now()));
+            const response = await fetch(target.href, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}: ${target.href}`);
             return response.text();
         }
 
+        async function fetchFirstAvailable(candidates) {
+            const errors = [];
+            for (const path of candidates) {
+                try {
+                    const text = await fetchText(path);
+                    return { text, path };
+                } catch (error) {
+                    errors.push(String(error?.message || error));
+                }
+            }
+            throw new Error('所有候選資料檔均無法讀取：\n' + errors.join('\n'));
+        }
+
         async function loadTourData() {
-            const response = await fetch(DATA_URL + '?t=' + Date.now(), {
-                cache: 'no-store',
-                headers: { 'Cache-Control': 'no-cache' }
-            });
-            if (!response.ok) throw new Error(`tour.json HTTP ${response.status}`);
-            TOUR_DATA = await response.json();
+            const result = await fetchFirstAvailable(DATA_URL_CANDIDATES);
+            try {
+                TOUR_DATA = JSON.parse(result.text);
+            } catch (error) {
+                throw new Error(`旅遊資料 JSON 格式錯誤（來源：${result.path}）：${error.message}`);
+            }
         }
 
         function parseRooms(text) {
@@ -183,14 +197,16 @@
                 return;
             }
 
+            const isEditing = document.body.dataset.guideEdit === '1';
             let html = '';
             members.forEach(member => {
+                const input = isEditing
+                    ? `<input type="text" inputmode="numeric" autocomplete="off" id="room_edit_${member.id}" value="${escapeHtml(member.room)}" class="flex-1 p-1.5 border border-sky-200 rounded-md focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm font-bold text-slate-700 bg-white" placeholder="房號">`
+                    : `<span class="flex-1 p-1.5 border border-slate-200 bg-slate-50 rounded-md text-sm font-bold text-slate-700 min-h-[34px] flex items-center">${member.room ? escapeHtml(member.room) : '<span class="text-slate-300 font-normal">尚未填寫</span>'}</span>`;
                 html += `
                     <div class="flex items-center text-sm border-b border-slate-100 pb-2 pt-1">
                         <span class="w-28 text-slate-500 font-bold text-xs bg-slate-100 py-1.5 px-2 rounded text-center mr-2 truncate">${escapeHtml(member.name)}</span>
-                        <span class="flex-1 p-1.5 border border-slate-200 bg-slate-50 rounded-md text-sm font-bold text-slate-700 min-h-[34px] flex items-center">
-                            ${member.room ? escapeHtml(member.room) : '<span class="text-slate-300 font-normal">尚未填寫</span>'}
-                        </span>
+                        ${input}
                     </div>`;
             });
 
@@ -199,10 +215,13 @@
                     <div class="flex items-center gap-1"><span class="sync-dot ok"></span>房號資料：GitHub 共用檔案</div>
                     <div class="mt-1">最後同步：${new Date().toLocaleTimeString('zh-TW', { hour12: false })}</div>
                     <div class="mt-2 flex gap-2">
-                        <button onclick="refreshRoomsNow()" class="flex-1 bg-slate-50 border border-slate-200 text-slate-600 py-1.5 rounded-lg font-bold hover:bg-slate-100"><i class="fa-solid fa-rotate mr-1"></i>重新讀取</button>
-                        <button onclick="openGuideEdit()" class="flex-1 bg-sky-50 border border-sky-200 text-sky-700 py-1.5 rounded-lg font-bold hover:bg-sky-100"><i class="fa-brands fa-github mr-1"></i>導遊修改</button>
+                        ${isEditing
+                            ? `<button onclick="cancelGuideEdit()" class="flex-1 bg-slate-50 border border-slate-200 text-slate-600 py-1.5 rounded-lg font-bold hover:bg-slate-100">取消編輯</button>
+                               <button onclick="prepareGithubCommit()" class="flex-1 bg-sky-600 text-white border border-sky-600 py-1.5 rounded-lg font-bold hover:bg-sky-700"><i class="fa-brands fa-github mr-1"></i>完成並更新 GitHub</button>`
+                            : `<button onclick="refreshRoomsNow()" class="flex-1 bg-slate-50 border border-slate-200 text-slate-600 py-1.5 rounded-lg font-bold hover:bg-slate-100"><i class="fa-solid fa-rotate mr-1"></i>重新讀取</button>
+                               <button onclick="openGuideEdit()" class="flex-1 bg-sky-50 border border-sky-200 text-sky-700 py-1.5 rounded-lg font-bold hover:bg-sky-100"><i class="fa-solid fa-pen-to-square mr-1"></i>導遊修改全部房號</button>`}
                     </div>
-                    <div class="mt-2">一般團員：只能查閱。導遊：請以具有 GitHub 寫入權限的帳號修改。</div>
+                    <div class="mt-2">一般團員：只能查閱。只有具有 GitHub Repository 寫入權限的導遊帳號可以將修改提交至 GitHub。</div>
                 </div>`;
             container.innerHTML = html;
         }
@@ -371,19 +390,35 @@
         }
 
         async function refreshRoomsNow() {
+            if (document.body.dataset.guideEdit === '1') return;
             const container = document.getElementById('room-list-container');
             const old = container.innerHTML;
             try {
-                roomsSourceText = await fetchText(ROOMS_URL);
+                const result = await fetchFirstAvailable(ROOMS_URL_CANDIDATES);
+                roomsSourceText = result.text;
                 ROOMS_DATA = parseRooms(roomsSourceText);
+                if (!ROOMS_DATA.members.length) {
+                    throw new Error(`找到 ${result.path}，但沒有解析到任何團員房號資料。`);
+                }
+                if (document.body.dataset.guideEdit === '1') { delete document.body.dataset.guideEdit; }
                 renderRooms();
             } catch (e) {
-                container.innerHTML = old || '<p class="text-xs text-red-500 text-center py-3">房號資料讀取失敗，請稍後重試。</p>';
+                const message = String(e?.message || e);
+                container.innerHTML = `
+                    <div class="text-xs text-red-500 leading-relaxed py-3">
+                        <p class="font-bold">共享資料載入失敗</p>
+                        <p class="mt-1 whitespace-pre-line">${escapeHtml(message)}</p>
+                        <button onclick="refreshRoomsNow()" class="mt-3 w-full bg-slate-50 border border-slate-200 text-slate-600 py-2 rounded-lg font-bold hover:bg-slate-100">重新讀取</button>
+                    </div>`;
                 console.error('rooms.txt 載入失敗：', e);
+                if (!old.includes('共享資料載入失敗')) console.error('原房號畫面已保留於記憶中，但資料無法刷新。');
             }
         }
 
         function deriveGithubEditUrl() {
+            const explicit = TOUR_DATA?.repository?.roomsEditUrl;
+            if (explicit) return explicit;
+
             // GitHub Pages 標準網址：https://OWNER.github.io/REPO/
             const host = location.hostname;
             const pathParts = location.pathname.split('/').filter(Boolean);
@@ -395,10 +430,82 @@
             return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/edit/main/data/rooms.txt`;
         }
 
+        function collectEditedRooms() {
+            const members = normalizeMembers();
+            return members.map(member => {
+                const input = document.getElementById(`room_edit_${member.id}`);
+                const room = input ? input.value.trim() : member.room;
+                return { ...member, room };
+            });
+        }
+
+        function buildRoomsText(members) {
+            const groupNo = TOUR_DATA?.trip?.groupNo || '';
+            const guidePassword = ROOMS_DATA.guidePassword || '';
+            const lines = [
+                `# ${TOUR_DATA?.trip?.title || '旅遊團'} ${groupNo} 團員房號共同資料`,
+                '# ============================================================',
+                `# GUIDE_PASSWORD=${guidePassword}`,
+                '#',
+                '# 格式：ID|團員姓名|房號',
+                '# 空白房號請保留最後的 |。',
+                '# 本檔案為 GitHub Pages 唯一共同房號資料來源。',
+                '# 一般團員只能查閱；導遊完成驗證後可批次整理全部房號。',
+                '# ============================================================',
+            ];
+            members.forEach(member => {
+                lines.push(`${member.id}|${member.name}|${member.room}`);
+            });
+            return lines.join('\n') + '\n';
+        }
+
+        async function copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return true;
+            } catch {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                let ok = false;
+                try { ok = document.execCommand('copy'); } catch { ok = false; }
+                ta.remove();
+                return ok;
+            }
+        }
+
+        function deriveGithubEditUrl() {
+            const explicit = TOUR_DATA?.repository?.roomsEditUrl;
+            if (explicit && !explicit.includes('YOUR_GITHUB_') && !explicit.includes('YOUR_REPOSITORY')) {
+                return explicit;
+            }
+
+            // 只在 GitHub Pages 標準網址上自動推算，例如：
+            // https://OWNER.github.io/REPO/
+            const host = location.hostname;
+            const pathParts = location.pathname.split('/').filter(Boolean);
+            const match = host.match(/^(.+)\.github\.io$/i);
+            if (!match) return '';
+
+            const owner = match[1];
+            const repo = pathParts[0] || `${owner}.github.io`;
+            return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/edit/main/data/rooms.txt`;
+        }
+
+        function cancelGuideEdit() {
+            delete document.body.dataset.guideEdit;
+            renderRooms();
+            if (!refreshTimer) refreshTimer = window.setInterval(refreshRoomsNow, REFRESH_MS);
+        }
+
         function openGuideEdit() {
             const expected = String(ROOMS_DATA.guidePassword || '').trim();
             if (!expected) {
-                alert('目前 rooms.txt 沒有設定導遊密碼。');
+                alert('目前 rooms.txt 沒有設定導遊密碼，無法進入修改模式。');
                 return;
             }
 
@@ -409,13 +516,60 @@
                 return;
             }
 
-            const url = deriveGithubEditUrl();
-            if (!url) {
-                alert('此頁目前不是標準 GitHub Pages 網址，無法自動產生 rooms.txt 編輯頁。請直接到 GitHub Repository → data → rooms.txt → 編輯。');
+            // 這個密碼只在瀏覽器端解鎖批次編輯 UI；GitHub 的實際修改權仍由導遊自己的 GitHub 帳號決定。
+            document.body.dataset.guideEdit = '1';
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+                refreshTimer = null;
+            }
+            renderRooms();
+        }
+
+        function prepareGithubCommit() {
+            if (document.body.dataset.guideEdit !== '1') {
+                alert('目前不是導遊編輯模式，無法修改房號。');
                 return;
             }
 
-            window.open(url, '_blank', 'noopener');
+            const members = collectEditedRooms();
+            const seenIds = new Set();
+            for (const member of members) {
+                if (seenIds.has(member.id)) {
+                    alert(`團員 ID ${member.id} 重複，無法更新。`);
+                    return;
+                }
+                seenIds.add(member.id);
+                if (!String(member.name).trim()) {
+                    alert(`ID ${member.id} 的團員姓名為空白，無法更新。`);
+                    return;
+                }
+            }
+
+            const roomsText = buildRoomsText(members);
+            const copiedPromise = copyToClipboard(roomsText);
+            const editUrl = deriveGithubEditUrl();
+
+            if (!editUrl) {
+                alert(
+                    (copied
+                        ? '全部 15 位團員的最新房號已複製到剪貼簿。'
+                        : '全部 15 位團員的最新房號已整理完成，但目前瀏覽器無法複製到剪貼簿。') +
+                    '\n\n請到 GitHub Repository → data → rooms.txt → 編輯，\n全選舊內容後貼上本次完整內容，再按 Commit changes。'
+                );
+                return;
+            }
+
+            const actionText = '全部 15 位團員的最新房號已整理完成。\n\n系統會先嘗試複製完整 rooms.txt；若瀏覽器拒絕剪貼簿，仍可在 GitHub 編輯頁手動貼上或使用下載檔。\n\n開啟 GitHub 後：全選 rooms.txt 舊內容 → 貼上 → Commit changes。';
+
+            if (!confirm(actionText + '\n\n按「確定」開啟 GitHub rooms.txt 編輯頁。')) return;
+
+            // 同步建立下載備份，避免瀏覽器不允許 clipboard 時失去完整內容。
+            downloadRoomsText(roomsText);
+            copiedPromise.catch(() => {});
+            window.open(editUrl, '_blank', 'noopener,noreferrer');
+            delete document.body.dataset.guideEdit;
+            if (!refreshTimer) refreshTimer = window.setInterval(refreshRoomsNow, REFRESH_MS);
+            renderRooms();
         }
 
         async function bootstrap() {
@@ -431,7 +585,8 @@
                 refreshTimer = window.setInterval(refreshRoomsNow, REFRESH_MS);
             } catch (e) {
                 document.getElementById('weather-info').innerText = '旅遊資料載入失敗，請檢查 GitHub data 檔案。';
-                document.getElementById('room-list-container').innerHTML = '<p class="text-xs text-red-500 text-center py-3">共享資料載入失敗。</p>';
+                // 房號區由 refreshRoomsNow() 自己顯示詳細錯誤，避免把旅遊資料錯誤誤報成房號錯誤。
+                refreshRoomsNow().catch(console.error);
                 console.error(e);
             }
         }

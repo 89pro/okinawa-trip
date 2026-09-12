@@ -1,54 +1,17 @@
-# GitHub 無資料庫旅遊行程框架
+# GitHub-only 旅遊行程手冊
 
-## 架構
+## 檔案
+- `index.html`：固定 UI + 視圖程式，不放旅遊硬編碼資料。
+- `data/tour.json`：團號、航班、行程、住宿、團員、Checklist、工具。
+- `data/rooms.txt`：全團共同房號與導遊密碼。
 
-- `index.html`：固定 UI / Tailwind / Font Awesome / JavaScript 視圖框架
-- `data/tour.json`：航班、行程、住宿、團員、聯絡資訊、工具等旅遊資料
-- `data/rooms.txt`：全團共同房號資料；導遊密碼也依需求記錄於此
+## 房號修改
+一般團員：只能查閱。
 
-不使用資料庫、不使用 Cloudflare、不使用 API Token。
+導遊：在網頁「團員房號分配表」按「導遊修改全部房號」，輸入 `data/rooms.txt` 的 `GUIDE_PASSWORD` 後，一次編輯 15 位團員，再按「完成並更新 GitHub」。網頁會整理完整 `rooms.txt`、複製到剪貼簿並下載備份，接著開啟 GitHub 對該檔案的編輯頁。導遊在 GitHub 按 `Commit changes` 即完成共同資料更新。
 
-## GitHub 使用方式
+## 重要限制
+純 GitHub / GitHub Pages 架構沒有後端，因此網頁不能代替導遊執行 GitHub Commit。真正的寫入權限仍由導遊自己的 GitHub 帳號控制。
 
-1. 將整個資料夾放入 GitHub Repository。
-2. 開啟 GitHub Pages。
-3. 網頁讀取 `data/tour.json` 與 `data/rooms.txt`。
-4. 一般團員僅需瀏覽 GitHub Pages。
-5. 導遊需要修改房號時，直接在 GitHub 編輯 `data/rooms.txt` 後 Commit changes。
-6. 其他手機會自動每 15 秒重新讀取一次，或在房號表按「重新讀取」。
-
-## rooms.txt 格式
-
-```text
-# GUIDE_PASSWORD=26091304
-1|林X塗|301
-2|林X福|302
-3|林X雄|
-```
-
-注意：因為密碼位於公開文字檔，這不是安全認證，只是防君子用途。真正的 GitHub 修改權限仍由 GitHub 帳號權限控制。
-
-## 導遊修改按鈕
-
-若網站是標準 GitHub Pages 網址，例如：
-
-`https://OWNER.github.io/REPO/`
-
-程式會自動推導 `https://github.com/OWNER/REPO/edit/main/data/rooms.txt`。
-
-若 Repository 名稱或 branch 不同，直接在 `index.html` 的：
-
-```javascript
-const GITHUB_EDIT_URL = '';
-```
-
-填入實際的 GitHub `rooms.txt` 編輯網址。
-
-## 未來更換旅遊團
-
-正常只需要修改：
-
-- `data/tour.json`
-- `data/rooms.txt`
-
-不需要修改 UI、Tailwind、CSS、主要 JavaScript。
+## 部署
+將本資料夾內容推送到 GitHub Repository，開啟 GitHub Pages。若 Repository 不是標準 `OWNER.github.io/REPO` 形式，可在 `data/tour.json` 的 `repository.roomsEditUrl` 填入該 `rooms.txt` 的 GitHub 編輯網址。
