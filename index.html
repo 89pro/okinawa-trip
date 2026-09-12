@@ -121,24 +121,51 @@
             return 'https://maps.google.com/?q=' + encodeURIComponent(String(query || ''));
         }
 
+        function getGithubRawUrl(path) {
+            const github = TOUR_DATA?.github || {};
+            const owner = String(github.owner || '').trim();
+            const repo = String(github.repo || '').trim();
+            const branch = String(github.branch || 'main').trim();
+            const cleanPath = String(path || '').replace(/^\/+/, '');
+            if (!owner || !repo || !cleanPath) {
+                throw new Error('tour.json 的 GitHub owner / repo / path 設定不完整。');
+            }
+            return `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(branch)}/${cleanPath}`;
+        }
+
         async function fetchText(url) {
             const target = new URL(url, document.baseURI);
             target.searchParams.set('_ts', Date.now().toString());
             const response = await fetch(target.href, { cache: 'no-store' });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}：${target.href}`);
             return response.text();
         }
 
         async function loadTourData() {
-            const text = await fetchText(DATA_URL);
-            try {
-                TOUR_DATA = JSON.parse(text);
-            } catch (error) {
-                throw new Error('tour.json 格式錯誤：' + error.message);
+            // tour.json 位於 GitHub；先用目前網頁位置嘗試，再以 raw.githubusercontent.com 作為穩定備援。
+            const urls = [
+                new URL('data/tour.json', document.baseURI).href,
+                'https://raw.githubusercontent.com/89pro/okinawa-trip/main/data/tour.json'
+            ];
+            let lastError = null;
+            for (const url of urls) {
+                try {
+                    const text = await fetchText(url);
+                    TOUR_DATA = JSON.parse(text);
+                    if (!TOUR_DATA || typeof TOUR_DATA !== 'object') throw new Error('tour.json 內容不是有效物件。');
+                    return;
+                } catch (error) {
+                    lastError = error;
+                }
             }
-            if (!TOUR_DATA || typeof TOUR_DATA !== 'object') {
-                throw new Error('tour.json 內容不是有效物件。');
-            }
+            throw new Error('tour.json 無法載入：' + (lastError?.message || '未知錯誤'));
+        }
+
+        async function fetchGithubRoomsFile() {
+            const roomsPath = TOUR_DATA?.github?.roomsPath || 'data/rooms.txt';
+            const url = getGithubRawUrl(roomsPath);
+            const responseText = await fetchText(url);
+            return { text: responseText, url };
         }
 
         function parseRooms(text) {
@@ -287,6 +314,16 @@
             }
 
             container.innerHTML = html;
+        }
+
+        function renderMeta() {
+            const trip = TOUR_DATA?.trip || {};
+            document.title = String(trip.title || '旅遊行程手冊');
+            document.getElementById('group-badge').textContent = `團號：${trip.groupNo || '-'}`;
+            document.getElementById('airline-badge').innerHTML = `<i class="fa-solid fa-plane"></i> ${escapeHtml(trip.airline || '-')}`;
+            document.getElementById('trip-title').textContent = String(trip.title || '旅遊行程手冊');
+            document.getElementById('trip-subtitle').textContent = `${trip.dateText || ''}${trip.leader ? ` | 領隊：${trip.leader}` : ''}`;
+            document.getElementById('weather-title').textContent = `${trip.weather?.locationName || ''}實時天氣預報`;
         }
 
         function renderItinerary() {
@@ -623,9 +660,10 @@
                 await fetchWeather();
                 startRoomAutoRefresh();
             } catch (error) {
-                console.error(error);
-                document.getElementById('weather-info').innerText = '旅遊資料載入失敗，請檢查 GitHub data 檔案。';
-                document.getElementById('room-list-container').innerHTML = `<div class="text-xs text-red-500 py-3">${escapeHtml(error.message || error)}<button onclick="location.reload()" class="mt-3 w-full bg-slate-50 border border-slate-200 text-slate-600 py-2 rounded-lg font-bold">重新載入</button></div>`;
+                console.error('bootstrap failed:', error);
+                const message = error?.message || String(error);
+                document.getElementById('weather-info').innerText = '資料載入失敗';
+                document.getElementById('room-list-container').innerHTML = `<div class="text-xs text-red-500 leading-relaxed py-3"><p class="font-bold">資料載入失敗</p><p class="mt-1 break-all">${escapeHtml(message)}</p><button onclick="location.reload()" class="mt-3 w-full bg-slate-50 border border-slate-200 text-slate-600 py-2 rounded-lg font-bold">重新載入</button></div>`;
             }
         }
 
