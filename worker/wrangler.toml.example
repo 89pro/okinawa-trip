@@ -1,9 +1,0 @@
-name = "travel-room-gateway"
-main = "worker.js"
-compatibility_date = "2026-08-21"
-
-[vars]
-ALLOWED_ORIGIN = "https://YOUR_GITHUB_USER.github.io"
-
-# 不要把敏感資料寫在這裡：
-# GITHUB_TOKEN / GUIDE_PASSWORD 必須用 Cloudflare Worker Secrets 設定。
